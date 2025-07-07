@@ -45,6 +45,7 @@ type Workflow struct {
 	Status      WorkflowStatus `json:"status"`
 	State       State          `json:"state"`
 	CurrentStep int            `json:"current_step"`
+	CreatedAt   time.Time      `json:"created_at"`
 
 	// non persisted fields
 	Steps               []Step               `json:"-"`
@@ -67,12 +68,29 @@ func WithSteps(steps ...Step) WorkflowOpt {
 	}
 }
 
+func (w *Workflow) SetBeforeWorkflowHooks(hooks ...BeforeWorkflowHook) {
+	w.beforeWorkflowHooks = hooks
+}
+
+func (w *Workflow) SetAfterWorkflowHooks(hooks ...AfterWorkflowHook) {
+	w.afterWorkflowHooks = hooks
+}
+
+func (w *Workflow) SetBeforeStepHooks(hooks ...BeforeStepHook) {
+	w.beforeStepHooks = hooks
+}
+
+func (w *Workflow) SetAfterStepHooks(hooks ...AfterStepHook) {
+	w.afterStepHooks = hooks
+}
+
 func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	w := &Workflow{
-		Name:   name,
-		Status: StatusPending,
-		Steps:  []Step{},
-		State:  make(State),
+		Name:      name,
+		Status:    StatusPending,
+		Steps:     []Step{},
+		State:     make(State),
+		CreatedAt: time.Now(),
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -124,9 +142,9 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
+				// sleep for the delay
 				time.Sleep(step.RetryPolicy.Delay)
 			}
-			// sleep for the delay
 			attempts++
 
 		}
@@ -145,6 +163,7 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 		w.CurrentStep = i + 1
 		if w.store != nil {
 			if err = w.store.SaveWorkflow(ctx, w); err != nil {
+
 				err = fmt.Errorf("failed to save state after step '%s': %w", step.Name, err)
 				return
 			}
