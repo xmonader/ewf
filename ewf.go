@@ -26,7 +26,7 @@ type Step struct {
 }
 
 type RetryPolicy struct {
-	MaxAttempts int           `json:"max_attempts"`
+	MaxAttempts uint          `json:"max_attempts"`
 	Delay       time.Duration `json:"delay"`
 }
 type BeforeWorkflowHook func(ctx context.Context, w *Workflow)
@@ -107,7 +107,7 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 
 		// execute the step with its retry policy (or default if it's nil)
 		// break if you reached the max attempts or the step was successful
-		attempts := 1
+		var attempts uint = 1
 		var stepErr error
 		for {
 			stepErr = step.Fn(ctx, w.State)
@@ -117,11 +117,16 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 			if step.RetryPolicy == nil {
 				break
 			}
-			if attempts > step.RetryPolicy.MaxAttempts {
+			if attempts >= step.RetryPolicy.MaxAttempts {
 				break
 			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				time.Sleep(step.RetryPolicy.Delay)
+			}
 			// sleep for the delay
-			time.Sleep(step.RetryPolicy.Delay)
 			attempts++
 
 		}
