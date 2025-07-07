@@ -120,7 +120,7 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 				break
 			}
 			// sleep for the delay
-			time.Sleep(step.RetryPolicy.Delay * time.Second)
+			time.Sleep(step.RetryPolicy.Delay)
 			attempts++
 
 		}
