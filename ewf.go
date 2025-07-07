@@ -36,17 +36,18 @@ type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 
 type Store interface {
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
-	GetWorkflow(ctx context.Context, id string) (*Workflow, error)
-	ListIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
+	LoadWorkflow(ctx context.Context, name string) (*Workflow, error)
+	ListWorkflowNamesByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
+	Close() error // could be a no-op, no problem.
 }
 type Workflow struct {
-	ID          string         `json:"id"`
+	Name        string         `json:"name"`
 	Status      WorkflowStatus `json:"status"`
-	Steps       []Step         `json:"steps"`
 	State       State          `json:"state"`
 	CurrentStep int            `json:"current_step"`
 
 	// non persisted fields
+	Steps               []Step               `json:"-"`
 	store               Store                `json:"-"`
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`
 	afterWorkflowHooks  []AfterWorkflowHook  `json:"-"`
@@ -66,9 +67,9 @@ func WithSteps(steps ...Step) WorkflowOpt {
 	}
 }
 
-func NewWorkflow(id string, opts ...WorkflowOpt) *Workflow {
+func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	w := &Workflow{
-		ID:     id,
+		Name:   name,
 		Status: StatusPending,
 		Steps:  []Step{},
 		State:  make(State),
