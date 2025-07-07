@@ -20,7 +20,7 @@ func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 	}
 	return &SQLiteStore{db: db}, nil
 }
-func (s *SQLiteStore) Prepare() error {
+func (s *SQLiteStore) Setup() error {
 	return s.prepWorkflowTable()
 }
 

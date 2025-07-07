@@ -15,7 +15,7 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
 	defer store.Close()
-	if err := store.Prepare(); err != nil {
+	if err := store.Setup(); err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	wfName := "test-sqlite-workflow"

@@ -45,7 +45,7 @@ func main() {
 		{Name: "wait_10_seconds", Fn: waitStep(10 * time.Second)},
 		{Name: "wait_15_seconds", Fn: waitStep(15 * time.Second)},
 	}
-	if err := store.Prepare(); err != nil {
+	if err := store.Setup(); err != nil {
 		log.Fatalf("Failed to prepare database: %v", err)
 	}
 

@@ -37,6 +37,7 @@ type BeforeStepHook func(ctx context.Context, w *Workflow, step *Step)
 type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 
 type Store interface {
+	Setup() error
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
 	LoadWorkflow(ctx context.Context, name string) (*Workflow, error)
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
