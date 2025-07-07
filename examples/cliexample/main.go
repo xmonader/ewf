@@ -80,7 +80,7 @@ func main() {
 
 		if wf.Status == ewf.StatusCompleted {
 			log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
-			return
+			continue
 		}
 		if err := wf.Run(ctx); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
