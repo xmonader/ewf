@@ -18,8 +18,8 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 	if err := store.Prepare(); err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
-	wfID := "test-sqlite-workflow"
-	wf := NewWorkflow(wfID,
+	wfName := "test-sqlite-workflow"
+	wf := NewWorkflow(wfName,
 		WithSteps(Step{Name: "dummy", Fn: func(ctx context.Context, s State) error { return nil }}),
 	)
 	wf.State["key"] = "value"
@@ -31,13 +31,13 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 
-	loadedWf, err := store.LoadWorkflow(context.Background(), wfID)
+	loadedWf, err := store.LoadWorkflow(context.Background(), wf.UUID)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if loadedWf.Name != wfID {
-		t.Errorf("Expected workflow ID %s, got %s", wfID, loadedWf.Name)
+	if loadedWf.Name != wfName {
+		t.Errorf("Expected workflow ID %s, got %s", wfName, loadedWf.Name)
 	}
 	if loadedWf.CurrentStep != 2 {
 		t.Errorf("Expected CurrentStep to be 2, got %d", loadedWf.CurrentStep)

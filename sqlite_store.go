@@ -27,7 +27,8 @@ func (s *SQLiteStore) Prepare() error {
 func (s *SQLiteStore) prepWorkflowTable() error {
 	q := `
 		CREATE TABLE IF NOT EXISTS workflows (
-			name TEXT NOT NULL PRIMARY KEY UNIQUE,
+			uuid TEXT NOT NULL PRIMARY KEY UNIQUE,
+			name TEXT NOT NULL,
 			status TEXT NOT NULL,
 			data BLOB NOT NULL
 		);
@@ -45,19 +46,19 @@ func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) erro
 		return fmt.Errorf("failed to marshal workflow: %w", err)
 	}
 
-	query := `INSERT OR REPLACE INTO workflows (name, status, data) VALUES (?, ?, ?)`
-	_, err = s.db.ExecContext(ctx, query, workflow.Name, workflow.Status, data)
+	query := `INSERT OR REPLACE INTO workflows (uuid, name, status, data) VALUES (?, ?, ?, ?)`
+	_, err = s.db.ExecContext(ctx, query, workflow.UUID, workflow.Name, workflow.Status, data)
 	if err != nil {
 		return fmt.Errorf("sqlite store: failed to save workflow %s: %w", workflow.Name, err)
 	}
 	return nil
 }
-func (s *SQLiteStore) LoadWorkflow(ctx context.Context, name string) (*Workflow, error) {
+func (s *SQLiteStore) LoadWorkflow(ctx context.Context, uuid string) (*Workflow, error) {
 	var data []byte
-	q := `SELECT data FROM workflows WHERE name = ?`
-	err := s.db.QueryRowContext(ctx, q, name).Scan(&data)
+	q := `SELECT data FROM workflows WHERE uuid = ?`
+	err := s.db.QueryRowContext(ctx, q, uuid).Scan(&data)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite store: failed to load workflow %s: %w", name, err)
+		return nil, fmt.Errorf("sqlite store: failed to load workflow %s: %w", uuid, err)
 	}
 
 	var workflow Workflow
@@ -68,9 +69,9 @@ func (s *SQLiteStore) LoadWorkflow(ctx context.Context, name string) (*Workflow,
 	return &workflow, nil
 }
 
-func (s *SQLiteStore) ListWorkflowNamesByStatus(ctx context.Context, status WorkflowStatus) ([]string, error) {
+func (s *SQLiteStore) ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error) {
 	var ids []string
-	q := `SELECT name FROM workflows WHERE status = ?`
+	q := `SELECT uuid FROM workflows WHERE status = ?`
 	rows, err := s.db.QueryContext(ctx, q, status)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: failed to list workflow IDs by status %s: %w", status, err)

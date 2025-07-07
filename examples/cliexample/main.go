@@ -14,21 +14,6 @@ const (
 	workflowName = "long_timer_workflow"
 )
 
-// createTimerWorkflow centralizes the definition of our workflow steps.
-func createTimerWorkflow(name string, store *ewf.SQLiteStore) *ewf.Workflow {
-	timerSteps := []ewf.Step{
-		{Name: "wait_5_seconds", Fn: waitStep(5 * time.Second)},
-		{Name: "wait_10_seconds", Fn: waitStep(10 * time.Second)},
-		{Name: "wait_15_seconds", Fn: waitStep(15 * time.Second)},
-	}
-
-	return ewf.NewWorkflow(
-		name,
-		ewf.WithStore(store),
-		ewf.WithSteps(timerSteps...),
-	)
-}
-
 // waitStep is a function that returns a StepFn.
 // This allows us to create steps with different durations easily.
 func waitStep(duration time.Duration) ewf.StepFn {
@@ -55,33 +40,53 @@ func main() {
 		log.Fatalf("Failed to create sqlite store: %v", err)
 	}
 	defer store.Close()
-
+	timerSteps := []ewf.Step{
+		{Name: "wait_5_seconds", Fn: waitStep(5 * time.Second)},
+		{Name: "wait_10_seconds", Fn: waitStep(10 * time.Second)},
+		{Name: "wait_15_seconds", Fn: waitStep(15 * time.Second)},
+	}
 	if err := store.Prepare(); err != nil {
 		log.Fatalf("Failed to prepare database: %v", err)
 	}
 
 	ctx := context.Background()
-	log.Println("Attempting to resume workflow if any...")
-	// Load the workflow from the store
-	loadedWf, err := store.LoadWorkflow(ctx, workflowName)
-	if err != nil {
+	// Load the pending workflow from the store
+	uuids, _ := store.ListWorkflowUUIDsByStatus(ctx, ewf.StatusRunning)
+	println(uuids)
+	if len(uuids) == 0 {
+		println("NEW")
+		wf := ewf.NewWorkflow("long-timer", ewf.WithStore(store), ewf.WithSteps(timerSteps...))
 
-		log.Printf("Failed to load workflow '%s'. Was it ever started? Error: %v\n", workflowName, err)
-	}
-	wf := createTimerWorkflow(workflowName, store)
-	if err == nil {
-		wf.CreatedAt = loadedWf.CreatedAt
-		wf.CurrentStep = loadedWf.CurrentStep
-	}
-	wf.SetBeforeStepHooks(beforeStepHook)
+		wf.SetBeforeStepHooks(beforeStepHook)
+		wf.Steps = append(wf.Steps, timerSteps...)
 
-	if wf.Status == ewf.StatusCompleted {
-		log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
+		if err := wf.Run(ctx); err != nil {
+			log.Fatalf("Workflow failed: %v", err)
+		}
+		log.Println("workflow completed successfully!")
 		return
+
 	}
-	if err := wf.Run(ctx); err != nil {
-		log.Fatalf("Workflow failed: %v", err)
+	println("RESUMING")
+	for _, id := range uuids {
+		wf, err := store.LoadWorkflow(ctx, id)
+		if err != nil {
+			log.Printf("Failed to load workflow '%s'. Was it ever started? Error: %v\n", workflowName, err)
+			continue
+		}
+
+		wf.SetBeforeStepHooks(beforeStepHook)
+		wf.Steps = append(wf.Steps, timerSteps...)
+
+		if wf.Status == ewf.StatusCompleted {
+			log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
+			return
+		}
+		if err := wf.Run(ctx); err != nil {
+			log.Fatalf("Workflow failed: %v", err)
+		}
+		log.Println("workflow completed successfully!")
+
 	}
-	log.Println("workflow completed successfully!")
 
 }

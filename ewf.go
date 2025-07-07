@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type State map[string]any
@@ -37,10 +39,11 @@ type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 type Store interface {
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
 	LoadWorkflow(ctx context.Context, name string) (*Workflow, error)
-	ListWorkflowNamesByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
+	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
 	Close() error // could be a no-op, no problem.
 }
 type Workflow struct {
+	UUID        string         `json:"uuid"`
 	Name        string         `json:"name"`
 	Status      WorkflowStatus `json:"status"`
 	State       State          `json:"state"`
@@ -86,6 +89,7 @@ func (w *Workflow) SetAfterStepHooks(hooks ...AfterStepHook) {
 
 func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	w := &Workflow{
+		UUID:      uuid.New().String(),
 		Name:      name,
 		Status:    StatusPending,
 		Steps:     []Step{},
