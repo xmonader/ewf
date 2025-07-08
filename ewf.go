@@ -72,6 +72,9 @@ func WithSteps(steps ...Step) WorkflowOpt {
 	}
 }
 
+func (w *Workflow) SetStore(store Store) {
+	w.store = store
+}
 func (w *Workflow) SetBeforeWorkflowHooks(hooks ...BeforeWorkflowHook) {
 	w.beforeWorkflowHooks = hooks
 }
@@ -168,7 +171,6 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 		w.CurrentStep = i + 1
 		if w.store != nil {
 			if err = w.store.SaveWorkflow(ctx, w); err != nil {
-
 				err = fmt.Errorf("failed to save state after step '%s': %w", step.Name, err)
 				return
 			}

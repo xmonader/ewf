@@ -52,13 +52,11 @@ func main() {
 	ctx := context.Background()
 	// Load the pending workflow from the store
 	uuids, _ := store.ListWorkflowUUIDsByStatus(ctx, ewf.StatusRunning)
-	println(uuids)
 	if len(uuids) == 0 {
 		println("NEW")
 		wf := ewf.NewWorkflow("long-timer", ewf.WithStore(store), ewf.WithSteps(timerSteps...))
 
 		wf.SetBeforeStepHooks(beforeStepHook)
-		wf.Steps = append(wf.Steps, timerSteps...)
 
 		if err := wf.Run(ctx); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
@@ -76,8 +74,8 @@ func main() {
 		}
 
 		wf.SetBeforeStepHooks(beforeStepHook)
-		wf.Steps = append(wf.Steps, timerSteps...)
-
+		wf.Steps = timerSteps
+		wf.SetStore(store)
 		if wf.Status == ewf.StatusCompleted {
 			log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
 			continue
