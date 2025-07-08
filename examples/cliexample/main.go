@@ -34,31 +34,43 @@ func beforeStepHook(ctx context.Context, w *ewf.Workflow, step *ewf.Step) {
 }
 
 func main() {
-	// Setup the SQLite store
 	store, err := ewf.NewSQLiteStore(dbFile)
 	if err != nil {
 		log.Fatalf("Failed to create sqlite store: %v", err)
 	}
 	defer store.Close()
-	timerSteps := []ewf.Step{
-		{Name: "wait_5_seconds", Fn: waitStep(5 * time.Second)},
-		{Name: "wait_10_seconds", Fn: waitStep(10 * time.Second)},
-		{Name: "wait_15_seconds", Fn: waitStep(15 * time.Second)},
+
+	engine, err := ewf.NewEngine(store)
+	if err != nil {
+		log.Fatalf("Failed to create engine: %v", err)
 	}
-	if err := store.Setup(); err != nil {
-		log.Fatalf("Failed to prepare database: %v", err)
+
+	engine.Register("wait_5_seconds", waitStep(5*time.Second))
+	engine.Register("wait_10_seconds", waitStep(10*time.Second))
+	engine.Register("wait_15_seconds", waitStep(15*time.Second))
+
+	def := &ewf.WorkflowTemplate{
+		Steps: []ewf.Step{
+			{Name: "wait_5_seconds"},
+			{Name: "wait_10_seconds"},
+			{Name: "wait_15_seconds"},
+		},
+		BeforeStepHooks: []ewf.BeforeStepHook{beforeStepHook},
 	}
+
+	engine.RegisterTemplate("long-timer", def)
 
 	ctx := context.Background()
 	// Load the pending workflow from the store
 	uuids, _ := store.ListWorkflowUUIDsByStatus(ctx, ewf.StatusRunning)
 	if len(uuids) == 0 {
 		println("NEW")
-		wf := ewf.NewWorkflow("long-timer", ewf.WithStore(store), ewf.WithSteps(timerSteps...))
+		wf, err := engine.NewWorkflow("long-timer")
+		if err != nil {
+			log.Fatalf("Failed to create workflow: %v", err)
+		}
 
-		wf.SetBeforeStepHooks(beforeStepHook)
-
-		if err := wf.Run(ctx); err != nil {
+		if err := engine.RunSync(ctx, wf); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
 		}
 		log.Println("workflow completed successfully!")
@@ -73,14 +85,11 @@ func main() {
 			continue
 		}
 
-		wf.SetBeforeStepHooks(beforeStepHook)
-		wf.Steps = timerSteps
-		wf.SetStore(store)
 		if wf.Status == ewf.StatusCompleted {
 			log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
 			continue
 		}
-		if err := wf.Run(ctx); err != nil {
+		if err := engine.RunSync(ctx, wf); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
 		}
 		log.Println("workflow completed successfully!")

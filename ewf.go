@@ -23,7 +23,6 @@ type StepFn func(ctx context.Context, state State) error
 
 type Step struct {
 	Name        string
-	Fn          StepFn
 	RetryPolicy *RetryPolicy
 }
 
@@ -59,6 +58,14 @@ type Workflow struct {
 	beforeStepHooks     []BeforeStepHook     `json:"-"`
 	afterStepHooks      []AfterStepHook      `json:"-"`
 }
+type WorkflowTemplate struct {
+	Steps               []Step
+	BeforeWorkflowHooks []BeforeWorkflowHook
+	AfterWorkflowHooks  []AfterWorkflowHook
+	BeforeStepHooks     []BeforeStepHook
+	AfterStepHooks      []AfterStepHook
+}
+
 type WorkflowOpt func(w *Workflow)
 
 func WithStore(store Store) WorkflowOpt {
@@ -66,29 +73,9 @@ func WithStore(store Store) WorkflowOpt {
 		w.store = store
 	}
 }
-func WithSteps(steps ...Step) WorkflowOpt {
-	return func(w *Workflow) {
-		w.Steps = append(w.Steps, steps...)
-	}
-}
 
 func (w *Workflow) SetStore(store Store) {
 	w.store = store
-}
-func (w *Workflow) SetBeforeWorkflowHooks(hooks ...BeforeWorkflowHook) {
-	w.beforeWorkflowHooks = hooks
-}
-
-func (w *Workflow) SetAfterWorkflowHooks(hooks ...AfterWorkflowHook) {
-	w.afterWorkflowHooks = hooks
-}
-
-func (w *Workflow) SetBeforeStepHooks(hooks ...BeforeStepHook) {
-	w.beforeStepHooks = hooks
-}
-
-func (w *Workflow) SetAfterStepHooks(hooks ...AfterStepHook) {
-	w.afterStepHooks = hooks
 }
 
 func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
@@ -106,7 +93,7 @@ func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	return w
 }
 
-func (w *Workflow) Run(ctx context.Context) (err error) {
+func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err error) {
 	// register all after workflow hooks
 	defer func() {
 		for _, hook := range w.afterWorkflowHooks {
@@ -136,7 +123,11 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 		var attempts uint = 1
 		var stepErr error
 		for {
-			stepErr = step.Fn(ctx, w.State)
+							activity, ok := activities[step.Name]
+				if !ok {
+										return fmt.Errorf("activity '%s' not registered", step.Name)
+				}
+				stepErr = activity(ctx, w.State)
 			if stepErr == nil {
 				break
 			}
@@ -146,12 +137,14 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 			if attempts >= step.RetryPolicy.MaxAttempts {
 				break
 			}
+			// Wait for the retry delay, while respecting context cancellation.
+			timer := time.NewTimer(step.RetryPolicy.Delay)
 			select {
 			case <-ctx.Done():
+				timer.Stop()
 				return ctx.Err()
-			default:
-				// sleep for the delay
-				time.Sleep(step.RetryPolicy.Delay)
+			case <-timer.C:
+				// Continue to the next attempt.
 			}
 			attempts++
 
@@ -170,18 +163,18 @@ func (w *Workflow) Run(ctx context.Context) (err error) {
 		}
 		w.CurrentStep = i + 1
 		if w.store != nil {
-			if err = w.store.SaveWorkflow(ctx, w); err != nil {
-				err = fmt.Errorf("failed to save state after step '%s': %w", step.Name, err)
-				return
+			if err := w.store.SaveWorkflow(ctx, w); err != nil {
+				return fmt.Errorf("failed to save workflow state after step %d: %v", w.CurrentStep-1, err)
 			}
 		}
 	}
+
 	w.Status = StatusCompleted
 	if w.store != nil {
 		if err := w.store.SaveWorkflow(ctx, w); err != nil {
-			err = fmt.Errorf("failed to save final state: %w", err)
-			return err
+			return fmt.Errorf("failed to save final workflow state: %w", err)
 		}
 	}
+
 	return nil
 }
