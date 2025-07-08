@@ -19,9 +19,8 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 	wfName := "test-sqlite-workflow"
-	wf := NewWorkflow(wfName,
-		WithSteps(Step{Name: "dummy", Fn: func(ctx context.Context, s State) error { return nil }}),
-	)
+	wf := NewWorkflow(wfName)
+	wf.Steps = []Step{{Name: "dummy_activity"}}
 	wf.State["key"] = "value"
 	wf.CurrentStep = 2
 	wf.Status = StatusCompleted

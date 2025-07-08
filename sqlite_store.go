@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
@@ -20,6 +21,7 @@ func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 	}
 	return &SQLiteStore{db: db}, nil
 }
+
 func (s *SQLiteStore) Setup() error {
 	return s.prepWorkflowTable()
 }
@@ -40,6 +42,8 @@ func (s *SQLiteStore) prepWorkflowTable() error {
 	return nil
 }
 
+
+
 func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) error {
 	data, err := json.Marshal(workflow)
 	if err != nil {
@@ -53,11 +57,16 @@ func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) erro
 	}
 	return nil
 }
+var ErrWorkflowNotFound = errors.New("workflow not found")
+
 func (s *SQLiteStore) LoadWorkflow(ctx context.Context, uuid string) (*Workflow, error) {
 	var data []byte
 	q := `SELECT data FROM workflows WHERE uuid = ?`
 	err := s.db.QueryRowContext(ctx, q, uuid).Scan(&data)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrWorkflowNotFound
+		}
 		return nil, fmt.Errorf("sqlite store: failed to load workflow %s: %w", uuid, err)
 	}
 
