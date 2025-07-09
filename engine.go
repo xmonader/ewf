@@ -48,7 +48,7 @@ func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 // This allows external access to the workflow store for querying workflow status and information.
 // Users can use this method to retrieve workflow details by UUID, check workflow execution status,
 // or list workflows with specific statuses. For example, after starting a workflow and receiving
-// its UUID, clients can use engine.Store().LoadWorkflow(ctx, uuid) to get the workflow's current state.
+// its UUID, clients can use engine.Store().LoadWorkflowByUUID(ctx, uuid) to get the workflow's current state.
 func (e *Engine) Store() Store {
 	return e.store
 }
@@ -138,7 +138,7 @@ func (e *Engine) ResumeRunningWorkflows() {
 
 		log.Printf("Resuming %d pending workflows in the background...", len(uuids))
 		for _, id := range uuids {
-			wf, err := e.Store().LoadWorkflow(ctx, id)
+			wf, err := e.Store().LoadWorkflowByUUID(ctx, id)
 			if err != nil {
 				log.Printf("failed to load workflow %s for resumption: %v", id, err)
 				continue

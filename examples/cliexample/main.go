@@ -79,7 +79,7 @@ func main() {
 	}
 	println("RESUMING")
 	for _, id := range uuids {
-		wf, err := store.LoadWorkflow(ctx, id)
+		wf, err := store.LoadWorkflowByUUID(ctx, id)
 		if err != nil {
 			log.Printf("Failed to load workflow '%s'. Was it ever started? Error: %v\n", workflowName, err)
 			continue

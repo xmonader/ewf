@@ -38,7 +38,8 @@ type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 type Store interface {
 	Setup() error // could be a no-op, no problem.
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
-	LoadWorkflow(ctx context.Context, name string) (*Workflow, error)
+	LoadWorkflowByName(ctx context.Context, name string) (*Workflow, error)
+	LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error)
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
 	Close() error // could be a no-op, no problem.
 }

@@ -112,7 +112,7 @@ func (a *App) statusHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uuid := vars["uuid"]
 
-	wf, err := a.engine.Store().LoadWorkflow(r.Context(), uuid)
+	wf, err := a.engine.Store().LoadWorkflowByUUID(r.Context(), uuid)
 	if err != nil {
 		if err == ewf.ErrWorkflowNotFound {
 			jsonError(w, fmt.Sprintf("workflow with id %s not found", uuid), http.StatusNotFound)
