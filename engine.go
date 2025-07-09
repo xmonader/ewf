@@ -9,17 +9,17 @@ import (
 // Engine is the central component for managing and executing workflows.
 // It holds a registry of all available activities and a store for persistence.
 type Engine struct {
-	activities  map[string]StepFn
-	templates   map[string]*WorkflowTemplate
-	store       Store
+	activities map[string]StepFn
+	templates  map[string]*WorkflowTemplate
+	store      Store
 }
 
 // NewEngine creates a new workflow engine.
 func NewEngine(store Store) (*Engine, error) {
 	engine := &Engine{
-		activities:  make(map[string]StepFn),
-		templates:   make(map[string]*WorkflowTemplate),
-		store:       store,
+		activities: make(map[string]StepFn),
+		templates:  make(map[string]*WorkflowTemplate),
+		store:      store,
 	}
 
 	if store != nil {
@@ -45,6 +45,10 @@ func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 }
 
 // Store returns the store associated with the engine.
+// This allows external access to the workflow store for querying workflow status and information.
+// Users can use this method to retrieve workflow details by UUID, check workflow execution status,
+// or list workflows with specific statuses. For example, after starting a workflow and receiving
+// its UUID, clients can use engine.Store().LoadWorkflow(ctx, uuid) to get the workflow's current state.
 func (e *Engine) Store() Store {
 	return e.store
 }
