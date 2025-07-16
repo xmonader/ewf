@@ -134,7 +134,7 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 		return nil
 	})
 
-	step1 := Step{Name: "step1", RetryPolicy: &RetryPolicy{MaxAttempts: 3, Delay: 1 * time.Millisecond}}
+	step1 := Step{Name: "step1", RetryPolicy: &RetryPolicy{MaxAttempts: 3, BackOff: ConstantBackoff(10 * time.Millisecond)}}
 	step2 := Step{Name: "step2"}
 
 	engine.RegisterTemplate("basic-workflow-retry", &WorkflowTemplate{
@@ -189,7 +189,7 @@ func TestWorkflow_Run_Retry_Failure(t *testing.T) {
 	})
 
 	step1 := Step{Name: "step1"}
-	step2 := Step{Name: "step2", RetryPolicy: &RetryPolicy{MaxAttempts: 3, Delay: 1 * time.Millisecond}}
+	step2 := Step{Name: "step2", RetryPolicy: &RetryPolicy{MaxAttempts: 3, BackOff: ConstantBackoff(10 * time.Millisecond)}}
 
 	engine.RegisterTemplate("basic-workflow-retry-failure", &WorkflowTemplate{
 		Steps: []Step{step1, step2},

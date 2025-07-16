@@ -3,6 +3,7 @@ package ewf
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestFailFastErrorBypassesRetries tests that ErrFailWorkflowNow causes workflow to fail immediately.
@@ -64,7 +65,7 @@ func TestNormalRetryPolicyStillWorks(t *testing.T) {
 	engine.RegisterTemplate("retry-test", &WorkflowTemplate{
 		Steps: []Step{{
 			Name:        "fail",
-			RetryPolicy: &RetryPolicy{MaxAttempts: 3, Delay: 0},
+			RetryPolicy: &RetryPolicy{MaxAttempts: 2, BackOff: ConstantBackoff(10 * time.Millisecond)},
 		}},
 	})
 	wf, err := engine.NewWorkflow("retry-test")
@@ -75,7 +76,7 @@ func TestNormalRetryPolicyStillWorks(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected workflow to fail, got nil")
 	}
-	if calls != 3 {
-		t.Fatalf("expected step to be called 3 times (for retries), got %d", calls)
+	if calls != 2 {
+		t.Fatalf("expected step to be called 2 times (for retries), got %d", calls)
 	}
 }

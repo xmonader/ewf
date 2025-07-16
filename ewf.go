@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 	"time"
 )
@@ -50,8 +51,8 @@ type Step struct {
 
 // RetryPolicy defines the retry behavior for a step.
 type RetryPolicy struct {
-	MaxAttempts uint          `json:"max_attempts"`
-	Delay       time.Duration `json:"delay"`
+	MaxAttempts uint
+	BackOff     backoff.BackOff
 }
 // BeforeWorkflowHook is a function run before a workflow starts.
 type BeforeWorkflowHook func(ctx context.Context, w *Workflow)
@@ -142,27 +143,38 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			stepHook(ctx, w, &step)
 		}
 
-		// execute the step with its retry policy (or default if it's nil)
-		// break if you reached the max attempts or the step was successful
-		var attempts uint = 1
+		var attempts uint = 0
 		var stepErr error
-		for {
-			activity, ok := activities[step.Name]
-			if !ok {
-				return fmt.Errorf("activity '%s' not registered", step.Name)
+		activity, ok := activities[step.Name]
+		if !ok {
+			return fmt.Errorf("activity '%s' not registered", step.Name)
+		}
+
+		var bo backoff.BackOff
+		var maxAttempts uint = 1
+		if step.RetryPolicy != nil {
+			if step.RetryPolicy.BackOff != nil {
+				bo = backoff.WithContext(step.RetryPolicy.BackOff, ctx)
+				if step.RetryPolicy.MaxAttempts > 0 {
+					maxAttempts = step.RetryPolicy.MaxAttempts
+				}
 			}
-			
-			// Inject step name into context for idempotency key helpers
+		}
+		if bo == nil {
+			// No retry policy or BackOff: single attempt, no retry
+			bo = backoff.WithContext(&backoff.StopBackOff{}, ctx)
+		}
+
+		attempts = 0
+		operation := func() error {
+			attempts++
 			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
-			
-			// Apply timeout if specified
 			if step.Timeout > 0 {
 				var cancel context.CancelFunc
 				ctxWithStep, cancel = context.WithTimeout(ctxWithStep, step.Timeout)
 				defer cancel()
 			}
-			
-			// Execute the step with timeout if specified, with panic safety
+			// Panic safety
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -171,36 +183,23 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 				}()
 				stepErr = activity(ctxWithStep, w.State)
 			}()
-			
-			// Check if the error is due to timeout
 			if ctxWithStep.Err() == context.DeadlineExceeded {
 				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
 			}
-			// Check for fail-fast error
 			if stepErr == ErrFailWorkflowNow {
-				break // break out to mark workflow as failed immediately
+				return backoff.Permanent(stepErr)
 			}
-			if stepErr == nil {
-				break
+			if stepErr != nil && attempts < maxAttempts {
+				return stepErr
 			}
-			if step.RetryPolicy == nil {
-				break
-			}
-			if attempts >= step.RetryPolicy.MaxAttempts {
-				break
-			}
-			// Wait for the retry delay, while respecting context cancellation.
-			timer := time.NewTimer(step.RetryPolicy.Delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return ctx.Err()
-			case <-timer.C:
-				// Continue to the next attempt.
-			}
-			attempts++
-
+			return backoff.Permanent(stepErr)
 		}
+
+		if err := backoff.Retry(operation, bo); err != nil {
+			stepErr = err
+		}
+		// After backoff.Retry, stepErr has the last error (or nil)
+
 		// --- After Step Hook ---
 		for _, hook := range w.afterStepHooks {
 			hook(ctx, w, &step, stepErr)

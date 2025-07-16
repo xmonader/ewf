@@ -12,6 +12,26 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 *   **Context-Aware Retries**: Define robust retry policies for steps that might fail, with delays that respect context cancellation to prevent resource leaks.
 *   **Lifecycle Hooks**: Execute custom logic before or after a workflow or a specific step.
 
+## Feature Matrix
+
+| Feature                       | Supported | Notes |
+|-------------------------------|:---------:|-------|
+| Step Retry Policies           |    ✅     | Per-step, with customizable attempts/delay |
+| Step Timeouts                 |    ✅     | Per-step, context-based cancellation |
+| Idempotency Helpers/Patterns  |    ✅     | Ergonomic, context-based, with docs/examples |
+| Before/After Workflow Hooks   |    ✅     | For setup, teardown, logging, etc. |
+| Before/After Step Hooks       |    ✅     | For auditing, metrics, etc. |
+| State Persistence             |    ✅     | SQLite built-in; pluggable interface |
+| Workflow Resumption           |    ✅     | Survives crashes/restarts |
+| Asynchronous Execution        |    ✅     | Run workflows in background |
+| Synchronous Execution         |    ✅     | For tests and CLI |
+| Pluggable Storage             |    ✅     | Implement your own Store |
+| CLI/HTTP Example Workflows    |    ✅     | See `examples/` directory |
+| Context Propagation           |    ✅     | Step context carries deadlines, values |
+| Step Metadata in Context      |    ✅     | Step name injected for idempotency |
+| Testing Support               |    ✅     | Unit, integration, E2E patterns |
+| GoDoc & User Guide            |    ✅     | See `docs/userguide.md` |
+
 ## Installation
 
 ```sh

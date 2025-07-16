@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestStepPanic verifies that panics in steps are caught and treated as errors
@@ -34,7 +35,7 @@ func TestStepPanic(t *testing.T) {
 			Name: "PanickyStep",
 			RetryPolicy: &RetryPolicy{
 				MaxAttempts: 2,
-				Delay:       0,
+				BackOff:     ConstantBackoff(10 * time.Millisecond),
 			},
 		}},
 	}

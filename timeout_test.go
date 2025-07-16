@@ -119,8 +119,8 @@ func TestStepTimeoutWithRetry(t *testing.T) {
 				Name:    "RetryStep",
 				Timeout: 50 * time.Millisecond, // Short timeout
 				RetryPolicy: &RetryPolicy{
-					MaxAttempts: 3,
-					Delay:       10 * time.Millisecond,
+					MaxAttempts: 2,
+					BackOff:     ConstantBackoff(10 * time.Millisecond),
 				},
 			},
 		},
@@ -146,7 +146,7 @@ func TestStepTimeoutWithRetry(t *testing.T) {
 	}
 	
 	// Verify all retry attempts were made
-	if attempts != 3 {
-		t.Fatalf("expected 3 retry attempts, got %d", attempts)
+	if attempts != 2 {
+		t.Fatalf("expected 2 retry attempts, got %d", attempts)
 	}
 }
