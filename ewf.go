@@ -2,11 +2,14 @@ package ewf
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
-
+	"fmt"
 	"github.com/google/uuid"
 )
+
+// ErrFailWorkflowNow is a special error that can be returned by a step to indicate that the workflow should be failed immediately.
+var ErrFailWorkflowNow = errors.New("fail workflow now")
 
 type State map[string]any
 
@@ -124,11 +127,15 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 		var attempts uint = 1
 		var stepErr error
 		for {
-							activity, ok := activities[step.Name]
-				if !ok {
-										return fmt.Errorf("activity '%s' not registered", step.Name)
-				}
-				stepErr = activity(ctx, w.State)
+			activity, ok := activities[step.Name]
+			if !ok {
+				return fmt.Errorf("activity '%s' not registered", step.Name)
+			}
+			stepErr = activity(ctx, w.State)
+			// Check for fail-fast error
+			if stepErr == ErrFailWorkflowNow {
+				break // break out to mark workflow as failed immediately
+			}
 			if stepErr == nil {
 				break
 			}
