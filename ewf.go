@@ -28,6 +28,16 @@ const (
 	StatusFailed    WorkflowStatus = "failed"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+// Context keys used by the workflow engine
+const (
+	// StepNameContextKey is used to store the current step name in the context
+	StepNameContextKey contextKey = "stepName"
+)
+
+
 // StepFn defines the function signature for a workflow step.
 type StepFn func(ctx context.Context, state State) error
 
@@ -35,7 +45,6 @@ type StepFn func(ctx context.Context, state State) error
 type Step struct {
 	Name        string
 	RetryPolicy *RetryPolicy
-	Timeout     time.Duration // Maximum execution time for the step (including retries)
 }
 
 // RetryPolicy defines the retry behavior for a step.
@@ -141,7 +150,9 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			if !ok {
 				return fmt.Errorf("activity '%s' not registered", step.Name)
 			}
-			stepErr = activity(ctx, w.State)
+			// Inject step name into context for idempotency key helpers
+			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
+			stepErr = activity(ctxWithStep, w.State)
 			// Check for fail-fast error
 			if stepErr == ErrFailWorkflowNow {
 				break // break out to mark workflow as failed immediately
