@@ -162,8 +162,15 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 				defer cancel()
 			}
 			
-			// Execute the step with timeout if specified
-			stepErr = activity(ctxWithStep, w.State)
+			// Execute the step with timeout if specified, with panic safety
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						stepErr = fmt.Errorf("panic in step '%s': %v", step.Name, r)
+					}
+				}()
+				stepErr = activity(ctxWithStep, w.State)
+			}()
 			
 			// Check if the error is due to timeout
 			if ctxWithStep.Err() == context.DeadlineExceeded {
