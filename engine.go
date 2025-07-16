@@ -68,11 +68,11 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 	}
 
 	w := NewWorkflow(name, WithStore(e.store))
-	w.Steps = def.Steps
-	w.beforeWorkflowHooks = def.BeforeWorkflowHooks
-	w.afterWorkflowHooks = def.AfterWorkflowHooks
-	w.beforeStepHooks = def.BeforeStepHooks
-	w.afterStepHooks = def.AfterStepHooks
+	w.Steps = append([]Step{}, def.Steps...)
+	w.beforeWorkflowHooks = append([]BeforeWorkflowHook{}, def.BeforeWorkflowHooks...)
+	w.afterWorkflowHooks = append([]AfterWorkflowHook{}, def.AfterWorkflowHooks...)
+	w.beforeStepHooks = append([]BeforeStepHook{}, def.BeforeStepHooks...)
+	w.afterStepHooks = append([]AfterStepHook{}, def.AfterStepHooks...)
 
 	return w, nil
 }
@@ -87,11 +87,11 @@ func (e *Engine) rehydrate(w *Workflow) error {
 		return fmt.Errorf("workflow template '%s' not registered", w.Name)
 	}
 	w.SetStore(e.store) // Re-attach the store for resumed workflows
-	w.Steps = def.Steps
-	w.beforeWorkflowHooks = def.BeforeWorkflowHooks
-	w.afterWorkflowHooks = def.AfterWorkflowHooks
-	w.beforeStepHooks = def.BeforeStepHooks
-	w.afterStepHooks = def.AfterStepHooks
+	w.Steps = append([]Step{}, def.Steps...)
+	w.beforeWorkflowHooks = append([]BeforeWorkflowHook{}, def.BeforeWorkflowHooks...)
+	w.afterWorkflowHooks = append([]AfterWorkflowHook{}, def.AfterWorkflowHooks...)
+	w.beforeStepHooks = append([]BeforeStepHook{}, def.BeforeStepHooks...)
+	w.afterStepHooks = append([]AfterStepHook{}, def.AfterStepHooks...)
 	return nil
 }
 

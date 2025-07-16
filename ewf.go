@@ -119,17 +119,6 @@ func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 }
 
 func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err error) {
-	// register all after workflow hooks
-	defer func() {
-		for _, hook := range w.afterWorkflowHooks {
-			hook(ctx, w, err)
-		}
-	}()
-
-	// execute all before workflow hooks
-	for _, hook := range w.beforeWorkflowHooks {
-		hook(ctx, w)
-	}
 
 	if w.Status == StatusCompleted {
 		return nil // Already completed
