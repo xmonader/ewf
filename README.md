@@ -1,4 +1,4 @@
-# EWF - Elastic Workflow Framework for Go
+# EWF - Embeddable Workflow Framework for Go
 
 EWF is a simple, lightweight, and embeddable workflow framework for Go applications. It allows you to define stateful, multi-step processes that are resilient to application crashes and interruptions.
 
@@ -16,7 +16,7 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 
 | Feature                       | Supported | Notes |
 |-------------------------------|:---------:|-------|
-| Step Retry Policies           |    ✅     | Per-step, with customizable attempts/delay |
+| Step Retry Policies           |    ✅     | Per-step, with customizable attempts and flexible backoff (constant, exponential, etc) |
 | Step Timeouts                 |    ✅     | Per-step, context-based cancellation |
 | Idempotency Helpers/Patterns  |    ✅     | Ergonomic, context-based, with docs/examples |
 | Before/After Workflow Hooks   |    ✅     | For setup, teardown, logging, etc. |
@@ -65,7 +65,7 @@ import (
 func waitActivity(duration time.Duration) ewf.StepFn {
 	return func(ctx context.Context, state ewf.State) error {
 		log.Printf("Waiting for %s...", duration)
-		time.Sleep(duration) // In real code, use a context-aware sleep!
+		time.Sleep(duration)
 		return nil
 	}
 }
@@ -91,14 +91,26 @@ func main() {
 	// 4. Define and register a workflow template.
 	myWorkflow := &ewf.WorkflowTemplate{
 		Steps: []ewf.Step{
-			{Name: "wait_5s"},
-			{Name: "wait_10s"},
+			{
+				Name: "wait_5s",
+				RetryPolicy: &ewf.RetryPolicy{
+					MaxAttempts: 3,
+					BackOff:     ewf.ConstantBackoff(2 * time.Second),
+				},
+			},
+			{
+				Name: "wait_10s",
+				RetryPolicy: &ewf.RetryPolicy{
+					MaxAttempts: 5,
+					BackOff:     ewf.ExponentialBackoff(500*time.Millisecond, 10*time.Second, 2.0),
+				},
+			},
 		},
 	}
-	engine.RegisterTemplate("my-workflow", myWorkflow)
+	engine.RegisterTemplate("my_workflow", myWorkflow)
 
 	// 5. Create a new workflow instance from the template.
-	wf, err := engine.NewWorkflow("my-workflow")
+	wf, err := engine.NewWorkflow("my_workflow")
 	if err != nil {
 		log.Fatalf("failed to create workflow: %v", err)
 	}
@@ -111,7 +123,32 @@ func main() {
 
 	log.Println("Workflow completed successfully!")
 }
+
+## Retry Policy & Backoff Examples
+
+You can use helpers from `backoffs.go` for ergonomic retry strategies. For example:
+
+```go
+step := ewf.Step{
+    Name: "StepA",
+    RetryPolicy: &ewf.RetryPolicy{
+        MaxAttempts: 3,
+        BackOff:     ewf.ConstantBackoff(2 * time.Second),
+    },
+}
+
+step := ewf.Step{
+    Name: "StepB",
+    RetryPolicy: &ewf.RetryPolicy{
+        MaxAttempts: 5,
+        BackOff:     ewf.ExponentialBackoff(500*time.Millisecond, 10*time.Second, 2.0),
+    },
+}
 ```
+- `MaxAttempts` is the total number of attempts (including the first try).
+- `BackOff` controls the delay pattern (constant, exponential, etc.).
+- If `BackOff` is nil, the step will not be retried.
+- Return `ewf.ErrFailWorkflowNow` to fail the workflow immediately, skipping retries.
 
 ## HTTP Server Example
 
