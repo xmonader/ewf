@@ -45,6 +45,7 @@ type StepFn func(ctx context.Context, state State) error
 type Step struct {
 	Name        string
 	RetryPolicy *RetryPolicy
+	Timeout     time.Duration // Maximum execution time for the step (including retries)
 }
 
 // RetryPolicy defines the retry behavior for a step.
@@ -150,9 +151,24 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			if !ok {
 				return fmt.Errorf("activity '%s' not registered", step.Name)
 			}
+			
 			// Inject step name into context for idempotency key helpers
 			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
+			
+			// Apply timeout if specified
+			if step.Timeout > 0 {
+				var cancel context.CancelFunc
+				ctxWithStep, cancel = context.WithTimeout(ctxWithStep, step.Timeout)
+				defer cancel()
+			}
+			
+			// Execute the step with timeout if specified
 			stepErr = activity(ctxWithStep, w.State)
+			
+			// Check if the error is due to timeout
+			if ctxWithStep.Err() == context.DeadlineExceeded {
+				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
+			}
 			// Check for fail-fast error
 			if stepErr == ErrFailWorkflowNow {
 				break // break out to mark workflow as failed immediately
