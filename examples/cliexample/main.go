@@ -1,3 +1,4 @@
+// Package main provides a CLI example for using the ewf workflow engine.
 package main
 
 import (
@@ -38,11 +39,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create sqlite store: %v", err)
 	}
-	defer store.Close()
+	if err := store.Close(); err != nil {
+		log.Printf("failed to close store: %v", err)
+	}
 
 	engine, err := ewf.NewEngine(store)
 	if err != nil {
 		log.Fatalf("Failed to create engine: %v", err)
+		return
 	}
 
 	engine.Register("wait_5_seconds", waitStep(5*time.Second))

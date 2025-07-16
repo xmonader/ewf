@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
+
+// SQLiteStore implements the Store interface using SQLite for persistence.
 type SQLiteStore struct {
 	db *sql.DB
 }
 
+// NewSQLiteStore creates a new SQLiteStore with the given DSN.
 func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
@@ -22,6 +26,7 @@ func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 	return &SQLiteStore{db: db}, nil
 }
 
+// Setup prepares the SQLite database for use.
 func (s *SQLiteStore) Setup() error {
 	return s.prepWorkflowTable()
 }
@@ -42,8 +47,7 @@ func (s *SQLiteStore) prepWorkflowTable() error {
 	return nil
 }
 
-
-
+// SaveWorkflow saves the given workflow to the SQLite database.
 func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) error {
 	data, err := json.Marshal(workflow)
 	if err != nil {
@@ -57,6 +61,8 @@ func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) erro
 	}
 	return nil
 }
+
+// ErrWorkflowNotFound is returned when a workflow is not found in the database.
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
 func (s *SQLiteStore) LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error) {
@@ -105,7 +111,11 @@ func (s *SQLiteStore) ListWorkflowUUIDsByStatus(ctx context.Context, status Work
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: failed to list workflow IDs by status %s: %w", status, err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var id string
@@ -120,6 +130,7 @@ func (s *SQLiteStore) ListWorkflowUUIDsByStatus(ctx context.Context, status Work
 	return ids, nil
 }
 
+// Close closes the SQLite database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }

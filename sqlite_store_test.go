@@ -6,15 +6,24 @@ import (
 	"testing"
 )
 
+// TestSQLiteStore_SaveAndLoad tests saving and loading a workflow in SQLiteStore.
 func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 	dbFile := "./test.db"
-	defer os.Remove(dbFile)
+	defer func() {
+	if err := os.Remove(dbFile); err != nil {
+		t.Fatalf("failed to remove dbFile: %v", err)
+	}
+}()
 
 	store, err := NewSQLiteStore(dbFile)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
-	defer store.Close()
+	defer func() {
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+}()
 	if err := store.Setup(); err != nil {
 		t.Fatalf("Prepare() error = %v", err)
 	}
@@ -34,13 +43,13 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadWorkflowByUUID() error = %v", err)
 	}
-	
+
 	// Also test loading by name
 	loadedByName, err := store.LoadWorkflowByName(context.Background(), wf.Name)
 	if err != nil {
 		t.Fatalf("LoadWorkflowByName() error = %v", err)
 	}
-	
+
 	if loadedByName.UUID != wf.UUID {
 		t.Errorf("Expected workflow UUID %s, got %s", wf.UUID, loadedByName.UUID)
 	}
@@ -61,13 +70,21 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 
 func TestSQLiteStore_LoadNotFound(t *testing.T) {
 	dbFile := "./test_not_found.db"
-	defer os.Remove(dbFile)
+	defer func() {
+	if err := os.Remove(dbFile); err != nil {
+		t.Fatalf("failed to remove dbFile: %v", err)
+	}
+}()
 
 	store, err := NewSQLiteStore(dbFile)
 	if err != nil {
 		t.Fatalf("NewSQLiteStore() error = %v", err)
 	}
-	defer store.Close()
+	defer func() {
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+}()
 
 	// Test LoadWorkflowByUUID with non-existent UUID
 	_, err = store.LoadWorkflowByUUID(context.Background(), "non-existent-id")

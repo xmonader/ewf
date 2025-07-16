@@ -1,3 +1,4 @@
+// Package ewf provides a workflow engine for defining and executing workflows in Go.
 package ewf
 
 import (
@@ -6,16 +7,16 @@ import (
 	"log"
 )
 
-
-
 // Engine is the central component for managing and executing workflows.
 // It holds a registry of all available activities and a store for persistence.
+// Engine is the central component for managing and executing workflows.
 type Engine struct {
 	activities map[string]StepFn
 	templates  map[string]*WorkflowTemplate
 	store      Store
 }
 
+// NewEngine creates a new workflow engine.
 // NewEngine creates a new workflow engine.
 func NewEngine(store Store) (*Engine, error) {
 	engine := &Engine{
@@ -35,12 +36,14 @@ func NewEngine(store Store) (*Engine, error) {
 
 // Register registers an activity function with the engine.
 // This allows the activity to be used in workflow steps by its name.
+// Register registers an activity function with the engine.
 func (e *Engine) Register(name string, activity StepFn) {
 	e.activities[name] = activity
 }
 
 // NewWorkflow creates a new workflow instance with the given name and steps.
 // The workflow is associated with the engine's store.
+// RegisterTemplate registers a workflow template with the engine.
 // RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 	e.templates[name] = def
@@ -51,10 +54,12 @@ func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 // Users can use this method to retrieve workflow details by UUID, check workflow execution status,
 // or list workflows with specific statuses. For example, after starting a workflow and receiving
 // its UUID, clients can use engine.Store().LoadWorkflowByUUID(ctx, uuid) to get the workflow's current state.
+// Store returns the store associated with the engine.
 func (e *Engine) Store() Store {
 	return e.store
 }
 
+// NewWorkflow creates a new workflow instance from a registered definition.
 // NewWorkflow creates a new workflow instance from a registered definition.
 func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 	def, ok := e.templates[name]
@@ -75,6 +80,7 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 // Run starts the execution of the given workflow.
 // It resolves the activity for each step from the engine's registry.
 // rehydrate applies the non-persisted fields from a workflow's definition.
+// rehydrate applies the non-persisted fields from a workflow's definition.
 func (e *Engine) rehydrate(w *Workflow) error {
 	def, ok := e.templates[w.Name]
 	if !ok {
@@ -89,6 +95,7 @@ func (e *Engine) rehydrate(w *Workflow) error {
 	return nil
 }
 
+// RunSync runs a workflow synchronously and blocks until it completes.
 // RunSync runs a workflow synchronously and blocks until it completes.
 func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 	if err := e.rehydrate(w); err != nil {
@@ -111,6 +118,7 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 
 // RunAsync runs a workflow asynchronously in a new goroutine.
 // Errors are logged to standard output.
+// RunAsync runs a workflow asynchronously in a new goroutine.
 func (e *Engine) RunAsync(ctx context.Context, w *Workflow) {
 	go func() {
 		if err := e.RunSync(ctx, w); err != nil {
@@ -122,6 +130,7 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow) {
 
 // ResumeRunningWorkflows finds all workflows with a 'running' status in the store
 // and resumes their execution in the background.
+// ResumeRunningWorkflows finds all workflows with a 'running' status in the store and resumes their execution in the background.
 func (e *Engine) ResumeRunningWorkflows() {
 	go func() {
 		// Create a new context for the background resumption process.

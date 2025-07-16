@@ -3,41 +3,56 @@ package ewf
 import (
 	"context"
 	"errors"
-	"time"
 	"fmt"
 	"github.com/google/uuid"
+	"time"
 )
 
 // ErrFailWorkflowNow is a special error that can be returned by a step to indicate that the workflow should be failed immediately.
 var ErrFailWorkflowNow = errors.New("fail workflow now")
 
+// State represents the workflow state as a generic key-value map.
 type State map[string]any
 
+// WorkflowStatus represents the status of a workflow.
 type WorkflowStatus string
 
 const (
+	// StatusPending indicates the workflow is pending and has not started.
 	StatusPending   WorkflowStatus = "pending"
+	// StatusRunning indicates the workflow is currently running.
 	StatusRunning   WorkflowStatus = "running"
+	// StatusCompleted indicates the workflow has completed successfully.
 	StatusCompleted WorkflowStatus = "completed"
+	// StatusFailed indicates the workflow has failed.
 	StatusFailed    WorkflowStatus = "failed"
 )
 
+// StepFn defines the function signature for a workflow step.
 type StepFn func(ctx context.Context, state State) error
 
+// Step represents a single step in a workflow.
 type Step struct {
 	Name        string
 	RetryPolicy *RetryPolicy
+	Timeout     time.Duration // Maximum execution time for the step (including retries)
 }
 
+// RetryPolicy defines the retry behavior for a step.
 type RetryPolicy struct {
 	MaxAttempts uint          `json:"max_attempts"`
 	Delay       time.Duration `json:"delay"`
 }
+// BeforeWorkflowHook is a function run before a workflow starts.
 type BeforeWorkflowHook func(ctx context.Context, w *Workflow)
+// AfterWorkflowHook is a function run after a workflow finishes.
 type AfterWorkflowHook func(ctx context.Context, w *Workflow, err error)
+// BeforeStepHook is a function run before a step starts.
 type BeforeStepHook func(ctx context.Context, w *Workflow, step *Step)
+// AfterStepHook is a function run after a step finishes.
 type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 
+// Store defines the interface for workflow persistence.
 type Store interface {
 	Setup() error // could be a no-op, no problem.
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
@@ -46,6 +61,7 @@ type Store interface {
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
 	Close() error // could be a no-op, no problem.
 }
+// Workflow represents a workflow instance.
 type Workflow struct {
 	UUID        string         `json:"uuid"`
 	Name        string         `json:"name"`
@@ -62,6 +78,7 @@ type Workflow struct {
 	beforeStepHooks     []BeforeStepHook     `json:"-"`
 	afterStepHooks      []AfterStepHook      `json:"-"`
 }
+// WorkflowTemplate defines the structure and hooks for a workflow definition.
 type WorkflowTemplate struct {
 	Steps               []Step
 	BeforeWorkflowHooks []BeforeWorkflowHook
@@ -70,18 +87,22 @@ type WorkflowTemplate struct {
 	AfterStepHooks      []AfterStepHook
 }
 
+// WorkflowOpt is a functional option for configuring a workflow.
 type WorkflowOpt func(w *Workflow)
 
+// WithStore sets the store for a workflow.
 func WithStore(store Store) WorkflowOpt {
 	return func(w *Workflow) {
 		w.store = store
 	}
 }
 
+// SetStore sets the store for the workflow.
 func (w *Workflow) SetStore(store Store) {
 	w.store = store
 }
 
+// NewWorkflow creates a new workflow instance with the given name and options.
 func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	w := &Workflow{
 		UUID:      uuid.New().String(),

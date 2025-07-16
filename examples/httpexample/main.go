@@ -1,3 +1,4 @@
+// Package main provides an HTTP example for using the ewf workflow engine.
 package main
 
 import (
@@ -22,11 +23,18 @@ type App struct {
 }
 
 // NewApp creates and initializes a new application.
+//
+// NewApp returns an error if the application cannot be created.
 func NewApp(logger *log.Logger) (*App, error) {
 	store, err := ewf.NewSQLiteStore("httpexample.db")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sqlite store: %v", err)
 	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("failed to close store: %v", err)
+		}
+	}()
 	engine, err := ewf.NewEngine(store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %v", err)
@@ -101,10 +109,12 @@ func (a *App) greetHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"workflow_id": wf.UUID,
 		"status_url":  fmt.Sprintf("/status/%s", wf.UUID),
-	})
+	}); err != nil {
+		log.Printf("failed to encode workflow response: %v", err)
+	}
 }
 
 // statusHandler checks the status of a workflow.
@@ -124,7 +134,9 @@ func (a *App) statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(wf)
+	if err := json.NewEncoder(w).Encode(wf); err != nil {
+		log.Printf("failed to encode workflow: %v", err)
+	}
 }
 
 func main() {
@@ -156,7 +168,6 @@ func createFileStep(ctx context.Context, state ewf.State) error {
 		return fmt.Errorf("name not found in workflow state")
 	}
 
-
 	// Use a filesystem-friendly timestamp for the filename.
 	filename := fmt.Sprintf("hello-%s.txt", time.Now().Format("20060102-150405"))
 	filepath := filepath.Join(os.TempDir(), filename)
@@ -175,5 +186,7 @@ func createFileStep(ctx context.Context, state ewf.State) error {
 func jsonError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
+		log.Printf("failed to encode json error: %v", err)
+	}
 }

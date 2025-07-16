@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// TestWorkflow_Run_Simple tests a simple workflow run.
 func TestWorkflow_Run_Simple(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -60,6 +61,7 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 	}
 }
 
+// TestWorkflow_Run_Fail tests workflow failure scenario.
 func TestWorkflow_Run_Fail(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -106,6 +108,7 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 	}
 }
 
+// TestWorkflow_Run_Retry tests workflow retry logic.
 func TestWorkflow_Run_Retry(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -166,6 +169,7 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 	}
 }
 
+// TestWorkflow_Run_Retry_Failure tests workflow retry failure scenario.
 func TestWorkflow_Run_Retry_Failure(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {

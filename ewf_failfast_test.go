@@ -5,13 +5,18 @@ import (
 	"testing"
 )
 
+// TestFailFastErrorBypassesRetries tests that ErrFailWorkflowNow causes workflow to fail immediately.
 func TestFailFastErrorBypassesRetries(t *testing.T) {
 	calls := 0
 	store, err := NewSQLiteStore(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+}()
 	engine, err := NewEngine(store)
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
@@ -36,13 +41,18 @@ func TestFailFastErrorBypassesRetries(t *testing.T) {
 	}
 }
 
+// TestNormalRetryPolicyStillWorks tests that normal retry policy works as expected.
 func TestNormalRetryPolicyStillWorks(t *testing.T) {
 	calls := 0
 	store, err := NewSQLiteStore(":memory:")
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+}()
 	engine, err := NewEngine(store)
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)

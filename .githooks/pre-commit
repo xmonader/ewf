@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit hook to run golangci-lint and prevent commit if lint fails
+if command -v golangci-lint >/dev/null 2>&1; then
+  echo 'Running golangci-lint...'
+  golangci-lint run ./...
+else
+  echo 'golangci-lint not found, running go vet and go fmt as fallback...'
+  go vet ./...
+  go fmt ./...
+fi
+if [ $? -ne 0 ]; then
+  echo 'Linting failed. Commit aborted.'
+  exit 1
+fi
