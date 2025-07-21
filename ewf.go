@@ -186,7 +186,7 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			if ctxWithStep.Err() == context.DeadlineExceeded {
 				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
 			}
-			if stepErr == ErrFailWorkflowNow {
+			if errors.Is(stepErr, ErrFailWorkflowNow) {
 				return backoff.Permanent(stepErr)
 			}
 			if stepErr != nil && attempts < maxAttempts {
