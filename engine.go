@@ -44,9 +44,15 @@ func (e *Engine) Register(name string, activity StepFn) {
 // NewWorkflow creates a new workflow instance with the given name and steps.
 // The workflow is associated with the engine's store.
 // RegisterTemplate registers a workflow template with the engine.
-// RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 	e.templates[name] = def
+}
+
+// Deregister removes a workflow template from the engine by name.
+// If the template does not exist, this is a no-op.
+// After deregistration, attempts to create or resume workflows from this template will fail.
+func (e *Engine) Deregister(name string) {
+	delete(e.templates, name)
 }
 
 // Store returns the store associated with the engine.
@@ -84,7 +90,7 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 func (e *Engine) rehydrate(w *Workflow) error {
 	def, ok := e.templates[w.Name]
 	if !ok {
-		return fmt.Errorf("workflow template '%s' not registered", w.Name)
+		return fmt.Errorf("workflow template '%s' not registered or has been deregistered", w.Name)
 	}
 	w.SetStore(e.store) // Re-attach the store for resumed workflows
 	w.Steps = append([]Step{}, def.Steps...)

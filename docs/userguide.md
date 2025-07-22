@@ -194,6 +194,20 @@ if err != nil {
 
 ---
 
+## 9. Deregistering Workflow Templates
+
+You can remove a workflow template from the engine using the `Deregister` method. This is useful for cleaning up unused or deprecated workflows at runtime.
+
+**Usage:**
+```go
+engine.Deregister("my_workflow")
+```
+- If the template does not exist, this is a no-op.
+- After deregistration, attempts to create or resume workflows from this template will fail with a clear error.
+- You can re-register a template with the same name later if needed.
+
+---
+
 ## 10. Best Practices & Patterns
 
 - **Always use context-aware APIs in steps** (e.g., HTTP, DB)
