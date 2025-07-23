@@ -20,13 +20,13 @@ type WorkflowStatus string
 
 const (
 	// StatusPending indicates the workflow is pending and has not started.
-	StatusPending   WorkflowStatus = "pending"
+	StatusPending WorkflowStatus = "pending"
 	// StatusRunning indicates the workflow is currently running.
-	StatusRunning   WorkflowStatus = "running"
+	StatusRunning WorkflowStatus = "running"
 	// StatusCompleted indicates the workflow has completed successfully.
 	StatusCompleted WorkflowStatus = "completed"
 	// StatusFailed indicates the workflow has failed.
-	StatusFailed    WorkflowStatus = "failed"
+	StatusFailed WorkflowStatus = "failed"
 )
 
 // contextKey is a custom type for context keys to avoid collisions
@@ -37,7 +37,6 @@ const (
 	// StepNameContextKey is used to store the current step name in the context
 	StepNameContextKey contextKey = "stepName"
 )
-
 
 // StepFn defines the function signature for a workflow step.
 type StepFn func(ctx context.Context, state State) error
@@ -54,12 +53,16 @@ type RetryPolicy struct {
 	MaxAttempts uint
 	BackOff     backoff.BackOff
 }
+
 // BeforeWorkflowHook is a function run before a workflow starts.
 type BeforeWorkflowHook func(ctx context.Context, w *Workflow)
+
 // AfterWorkflowHook is a function run after a workflow finishes.
 type AfterWorkflowHook func(ctx context.Context, w *Workflow, err error)
+
 // BeforeStepHook is a function run before a step starts.
 type BeforeStepHook func(ctx context.Context, w *Workflow, step *Step)
+
 // AfterStepHook is a function run after a step finishes.
 type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 
@@ -70,8 +73,12 @@ type Store interface {
 	LoadWorkflowByName(ctx context.Context, name string) (*Workflow, error)
 	LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error)
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
+	SaveWorkflowTemplate(ctx context.Context, name string, tmpl *WorkflowTemplate) error
+	LoadWorkflowTemplate(ctx context.Context, name string) (*WorkflowTemplate, error)
+	LoadAllWorkflowTemplates(ctx context.Context) (map[string]*WorkflowTemplate, error)
 	Close() error // could be a no-op, no problem.
 }
+
 // Workflow represents a workflow instance.
 type Workflow struct {
 	UUID        string         `json:"uuid"`
@@ -89,6 +96,7 @@ type Workflow struct {
 	beforeStepHooks     []BeforeStepHook     `json:"-"`
 	afterStepHooks      []AfterStepHook      `json:"-"`
 }
+
 // WorkflowTemplate defines the structure and hooks for a workflow definition.
 type WorkflowTemplate struct {
 	Steps               []Step

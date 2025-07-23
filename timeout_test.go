@@ -62,16 +62,16 @@ func TestStepTimeout(t *testing.T) {
 
 	// Run the workflow - it should fail with timeout
 	err = engine.RunSync(context.Background(), wf)
-	
+
 	// Verify the workflow failed due to timeout
 	if err == nil {
 		t.Fatalf("expected workflow to fail with timeout error, but it succeeded")
 	}
-	
+
 	if !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got: %v", err)
 	}
-	
+
 	if !slowStepInterrupted {
 		t.Fatalf("step was not interrupted by timeout")
 	}
@@ -102,7 +102,7 @@ func TestStepTimeoutWithRetry(t *testing.T) {
 	// Register a step that times out on each attempt
 	engine.Register("RetryStep", func(ctx context.Context, state State) error {
 		attempts++
-		
+
 		// Always time out
 		select {
 		case <-time.After(200 * time.Millisecond):
@@ -135,16 +135,16 @@ func TestStepTimeoutWithRetry(t *testing.T) {
 
 	// Run the workflow - it should fail after all retries
 	err = engine.RunSync(context.Background(), wf)
-	
+
 	// Verify the workflow failed due to timeout after retries
 	if err == nil {
 		t.Fatalf("expected workflow to fail with timeout error, but it succeeded")
 	}
-	
+
 	if !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got: %v", err)
 	}
-	
+
 	// Verify all retry attempts were made
 	if attempts != 2 {
 		t.Fatalf("expected 2 retry attempts, got %d", attempts)

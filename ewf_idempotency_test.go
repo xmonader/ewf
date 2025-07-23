@@ -51,7 +51,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 
 		// Store payment result
 		state["payment_id"] = "payment_123"
-		
+
 		// Mark step as completed
 		state[idempotencyKey] = true
 		return nil
@@ -75,7 +75,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 		// Simulate sending email
 		t.Logf("Sending email for step: %s", stepName)
 		emailAPICalls++
-		
+
 		// Mark email as sent
 		state[idempotencyKey] = true
 		return nil
@@ -167,7 +167,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 		// Simulate API call
 		t.Logf("Executing side effect for step: %s", stepName)
 		apiCalls++
-		
+
 		// Mark side effect as done - IMPORTANT: do this BEFORE potential crash
 		state[idempotencyKey] = true
 

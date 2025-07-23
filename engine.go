@@ -29,6 +29,12 @@ func NewEngine(store Store) (*Engine, error) {
 		if err := store.Setup(); err != nil {
 			return nil, fmt.Errorf("failed to setup store: %w", err)
 		}
+		templates, err := store.LoadAllWorkflowTemplates(context.Background())
+		if err == nil {
+			for name, tmpl := range templates {
+				engine.templates[name] = tmpl
+			}
+		}
 	}
 
 	return engine, nil
@@ -47,6 +53,9 @@ func (e *Engine) Register(name string, activity StepFn) {
 // RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 	e.templates[name] = def
+	if e.store != nil {
+		_ = e.store.SaveWorkflowTemplate(context.Background(), name, def)
+	}
 }
 
 // Store returns the store associated with the engine.

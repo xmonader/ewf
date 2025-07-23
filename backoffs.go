@@ -1,8 +1,8 @@
 package ewf
 
 import (
-	"time"
 	"github.com/cenkalti/backoff/v4"
+	"time"
 )
 
 // ConstantBackoff returns a backoff.BackOff that always waits for the specified delay.

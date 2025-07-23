@@ -2,10 +2,10 @@ package ewf
 
 import (
 	"context"
-	"testing"
-	"time"
 	"errors"
 	"fmt"
+	"testing"
+	"time"
 )
 
 // TestFailFastErrorBypassesRetries tests that ErrFailWorkflowNow causes workflow to fail immediately.
@@ -16,10 +16,10 @@ func TestFailFastErrorBypassesRetries(t *testing.T) {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
 	defer func() {
-	if err := store.Close(); err != nil {
-		t.Fatalf("failed to close store: %v", err)
-	}
-}()
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	}()
 	engine, err := NewEngine(store)
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
