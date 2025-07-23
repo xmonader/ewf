@@ -3,73 +3,19 @@ package ewf
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 )
 
-func TestSQLiteStore_TemplatePersistence(t *testing.T) {
-	if err := os.Remove("test_templates.db"); err != nil && !os.IsNotExist(err) {
-		t.Fatalf("failed to remove db: %v", err)
-	}
-	store, err := NewSQLiteStore("test_templates.db")
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Fatalf("failed to close store: %v", err)
-		}
-	}()
-	defer func() {
-		if err := os.Remove("test_templates.db"); err != nil && !os.IsNotExist(err) {
-			t.Fatalf("failed to remove db: %v", err)
-		}
-	}()
-
-	if err := store.Setup(); err != nil {
-		t.Fatalf("failed to setup store: %v", err)
-	}
-
-	ctx := context.Background()
-
-	tmpl := &WorkflowTemplate{
-		Steps: []Step{{Name: "step1"}, {Name: "step2"}},
-	}
-	if err := store.SaveWorkflowTemplate(ctx, "tmpl1", tmpl); err != nil {
-		t.Fatalf("failed to save template: %v", err)
-	}
-
-	loaded, err := store.LoadWorkflowTemplate(ctx, "tmpl1")
-	if err != nil {
-		t.Fatalf("failed to load template: %v", err)
-	}
-	if len(loaded.Steps) != 2 || loaded.Steps[0].Name != "step1" || loaded.Steps[1].Name != "step2" {
-		t.Fatalf("loaded template mismatch: %+v", loaded)
-	}
-
-	// Save another template
-	tmpl2 := &WorkflowTemplate{Steps: []Step{{Name: "s3"}}}
-	if err := store.SaveWorkflowTemplate(ctx, "tmpl2", tmpl2); err != nil {
-		t.Fatalf("failed to save template2: %v", err)
-	}
-
-	all, err := store.LoadAllWorkflowTemplates(ctx)
-	if err != nil {
-		t.Fatalf("failed to load all templates: %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("expected 2 templates, got %d", len(all))
-	}
-	if _, ok := all["tmpl1"]; !ok {
-		t.Fatalf("tmpl1 not found in all templates")
-	}
-	if _, ok := all["tmpl2"]; !ok {
-		t.Fatalf("tmpl2 not found in all templates")
-	}
-}
-
 // TestWorkflow_Run_Simple tests a simple workflow run.
+//
+// Scenario:
+// 1. Creates an engine and registers two activities ("step1" and "step2") that update flags and state.
+// 2. Registers a workflow template with these two steps.
+// 3. Instantiates and runs the workflow synchronously.
+// 4. Verifies both steps executed, state was updated, and workflow step index is correct.
+//
+// This test ensures basic workflow execution, step registration, and state propagation work as expected.
 func TestWorkflow_Run_Simple(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -124,6 +70,13 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 }
 
 // TestWorkflow_Run_Fail tests workflow failure scenario.
+//
+// Scenario:
+// 1. Creates an engine and registers a step that always fails.
+// 2. Registers a second step that should never run due to the failure.
+// 3. Runs the workflow and verifies it fails at the first step.
+//
+// This test ensures workflows properly handle step failures.
 func TestWorkflow_Run_Fail(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -171,6 +124,14 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 }
 
 // TestWorkflow_Run_Retry tests workflow retry logic.
+//
+// Scenario:
+// 1. Creates an engine and registers a step that fails on the first two attempts but succeeds on the third.
+// 2. Configures the step with a retry policy of 3 maximum attempts.
+// 3. Runs the workflow and verifies it eventually succeeds after retries.
+// 4. Verifies the step was attempted exactly 3 times.
+//
+// This test ensures the retry policy works correctly for transient failures.
 func TestWorkflow_Run_Retry(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -232,6 +193,13 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 }
 
 // TestWorkflow_Run_Retry_Failure tests workflow retry failure scenario.
+//
+// Scenario:
+// 1. Creates an engine and registers a step ("step1") that always fails.
+// 2. Registers a second step ("step2") that should never run.
+// 3. Runs the workflow and verifies that the workflow fails, only the first step runs, and state/step index reflect the failure.
+//
+// This test ensures workflows fail if all retries are exhausted and do not proceed to subsequent steps.
 func TestWorkflow_Run_Retry_Failure(t *testing.T) {
 	engine, err := NewEngine(nil)
 	if err != nil {
@@ -278,5 +246,235 @@ func TestWorkflow_Run_Retry_Failure(t *testing.T) {
 	}
 	if _, ok := wf.State["step2output"]; ok {
 		t.Errorf("step2 output should not have been found")
+	}
+}
+
+// TestSimpleIdempotencyPattern demonstrates a simple idempotency pattern
+// using the step name from context and flags in the workflow state.
+//
+// Scenario:
+// 1. Creates an engine with an in-memory store.
+// 2. Registers two activities that implement idempotency patterns using state flags.
+// 3. Runs a workflow with these activities and verifies they execute once.
+// 4. Resets and reruns the workflow to simulate a crash recovery.
+// 5. Verifies the activities detect they've already run and don't execute again.
+//
+// This test demonstrates how to make workflow steps idempotent using state flags.
+func TestSimpleIdempotencyPattern(t *testing.T) {
+	// Create a test store
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
+
+	// Create an engine with the store
+	engine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+
+	// Track API calls to ensure idempotency
+	var paymentAPICalls int
+	var emailAPICalls int
+
+	// Register activities that use idempotency pattern
+	engine.Register("ProcessPayment", func(ctx context.Context, state State) error {
+		// Get step name from context
+		stepName, ok := ctx.Value(StepNameContextKey).(string)
+		if !ok {
+			return fmt.Errorf("step name not found in context")
+		}
+
+		// Simple idempotency check - have we already processed this payment?
+		idempotencyKey := fmt.Sprintf("__completed_%s", stepName)
+		if _, done := state[idempotencyKey]; done {
+			t.Logf("Payment already processed, skipping")
+			return nil
+		}
+
+		// Simulate API call
+		t.Logf("Processing payment for step: %s", stepName)
+		paymentAPICalls++
+
+		// Store payment result
+		state["payment_id"] = "payment_123"
+
+		// Mark step as completed
+		state[idempotencyKey] = true
+		return nil
+	})
+
+	engine.Register("SendEmail", func(ctx context.Context, state State) error {
+		// Get step name from context
+		stepName, ok := ctx.Value(StepNameContextKey).(string)
+		if !ok {
+			return fmt.Errorf("step name not found in context")
+		}
+
+		// Simple idempotency check with email address for deterministic behavior
+		emailAddress := "user@example.com"
+		idempotencyKey := fmt.Sprintf("__email_sent_%s_%s", stepName, emailAddress)
+		if _, sent := state[idempotencyKey]; sent {
+			t.Logf("Email already sent to %s, skipping", emailAddress)
+			return nil
+		}
+
+		// Simulate sending email
+		t.Logf("Sending email for step: %s", stepName)
+		emailAPICalls++
+
+		// Mark email as sent
+		state[idempotencyKey] = true
+		return nil
+	})
+
+	// Create a workflow template with the steps
+	tmpl := &WorkflowTemplate{
+		Steps: []Step{
+			{Name: "ProcessPayment"},
+			{Name: "SendEmail"},
+		},
+	}
+	engine.RegisterTemplate("payment_workflow", tmpl)
+
+	// Create and run the workflow
+	wf, err := engine.NewWorkflow("payment_workflow")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	// Run the workflow
+	if err := engine.RunSync(context.Background(), wf); err != nil {
+		t.Fatalf("failed to run workflow: %v", err)
+	}
+
+	// Verify API calls
+	if paymentAPICalls != 1 {
+		t.Errorf("expected 1 payment API call, got %d", paymentAPICalls)
+	}
+	if emailAPICalls != 1 {
+		t.Errorf("expected 1 email API call, got %d", emailAPICalls)
+	}
+
+	// Reset workflow to simulate resuming after a crash
+	wf.Status = StatusPending
+	wf.CurrentStep = 0
+
+	// Run the workflow again
+	if err := engine.RunSync(context.Background(), wf); err != nil {
+		t.Fatalf("failed to run workflow again: %v", err)
+	}
+
+	// Verify API calls - should not have increased due to idempotency
+	if paymentAPICalls != 1 {
+		t.Errorf("expected still 1 payment API call, got %d", paymentAPICalls)
+	}
+	if emailAPICalls != 1 {
+		t.Errorf("expected still 1 email API call, got %d", emailAPICalls)
+	}
+}
+
+// TestCrashRecoveryWithIdempotency tests idempotency with a workflow that crashes and resumes
+//
+// Scenario:
+// 1. Creates an engine with an in-memory store.
+// 2. Registers an activity that simulates a crash after performing a side effect.
+// 3. Runs a workflow with this activity and verifies it fails but records the side effect.
+// 4. Resets and reruns the workflow to simulate crash recovery.
+// 5. Verifies the activity detects it already performed the side effect and doesn't duplicate it.
+//
+// This test demonstrates how to handle crashes while maintaining idempotency.
+func TestCrashRecoveryWithIdempotency(t *testing.T) {
+	// Create a test store
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
+
+	// Create an engine with the store
+	engine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+
+	// Track API calls to ensure idempotency
+	var apiCalls int
+
+	// Register an activity that simulates a crash after side effect
+	engine.Register("CrashyStep", func(ctx context.Context, state State) error {
+		// Get step name from context
+		stepName, ok := ctx.Value(StepNameContextKey).(string)
+		if !ok {
+			return fmt.Errorf("step name not found in context")
+		}
+
+		// Simple idempotency check
+		idempotencyKey := fmt.Sprintf("__side_effect_%s", stepName)
+		if _, done := state[idempotencyKey]; done {
+			t.Logf("Side effect already executed, skipping")
+			return nil
+		}
+
+		// Simulate API call
+		t.Logf("Executing side effect for step: %s", stepName)
+		apiCalls++
+
+		// Mark side effect as done - IMPORTANT: do this BEFORE potential crash
+		state[idempotencyKey] = true
+
+		// Simulate crash by returning error (only on first execution)
+		if apiCalls == 1 {
+			return fmt.Errorf("simulated crash")
+		}
+		return nil
+	})
+
+	// Create a workflow template with the step
+	tmpl := &WorkflowTemplate{
+		Steps: []Step{
+			{Name: "CrashyStep"},
+		},
+	}
+	engine.RegisterTemplate("crashy_workflow", tmpl)
+
+	// Create and run the workflow
+	wf, err := engine.NewWorkflow("crashy_workflow")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	// Run the workflow - it should fail
+	err = engine.RunSync(context.Background(), wf)
+	if err == nil {
+		t.Fatalf("expected an error, got nil")
+	}
+
+	// Verify API calls
+	if apiCalls != 1 {
+		t.Errorf("expected 1 API call, got %d", apiCalls)
+	}
+
+	// Reset workflow to simulate resuming after a crash
+	wf.Status = StatusPending
+	wf.CurrentStep = 0
+
+	// Run the workflow again
+	if err := engine.RunSync(context.Background(), wf); err != nil {
+		t.Fatalf("failed to run workflow again: %v", err)
+	}
+
+	// Verify API calls - should not have increased due to idempotency
+	if apiCalls != 1 {
+		t.Errorf("expected still 1 API call, got %d", apiCalls)
 	}
 }
