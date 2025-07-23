@@ -87,6 +87,9 @@ type Workflow struct {
 	State       State          `json:"state"`
 	CurrentStep int            `json:"current_step"`
 	CreatedAt   time.Time      `json:"created_at"`
+	// StepRetryAttempts tracks the number of retry attempts per step
+	// Map key is the step index
+	StepRetryAttempts map[int]uint `json:"step_retry_attempts,omitempty"`
 
 	// non persisted fields
 	Steps               []Step               `json:"-"`
@@ -124,12 +127,13 @@ func (w *Workflow) SetStore(store Store) {
 // NewWorkflow creates a new workflow instance with the given name and options.
 func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	w := &Workflow{
-		UUID:      uuid.New().String(),
-		Name:      name,
-		Status:    StatusPending,
-		Steps:     []Step{},
-		State:     make(State),
-		CreatedAt: time.Now(),
+		UUID:             uuid.New().String(),
+		Name:             name,
+		Status:           StatusPending,
+		Steps:            []Step{},
+		State:            make(State),
+		CreatedAt:        time.Now(),
+		StepRetryAttempts: make(map[int]uint),
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -151,17 +155,26 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			stepHook(ctx, w, &step)
 		}
 
-		var attempts uint = 0
 		var stepErr error
 		activity, ok := activities[step.Name]
 		if !ok {
 			return fmt.Errorf("activity '%s' not registered", step.Name)
 		}
 
+		// Get current step index
+		stepIndex := i
+
+		// Initialize or get the current retry attempts for this step
+		if _, exists := w.StepRetryAttempts[stepIndex]; !exists {
+			w.StepRetryAttempts[stepIndex] = 0
+		}
+
 		var bo backoff.BackOff
 		var maxAttempts uint = 1
 		if step.RetryPolicy != nil {
 			if step.RetryPolicy.BackOff != nil {
+				// Always reset the backoff to ensure consistent behavior
+				step.RetryPolicy.BackOff.Reset()
 				bo = backoff.WithContext(step.RetryPolicy.BackOff, ctx)
 				if step.RetryPolicy.MaxAttempts > 0 {
 					maxAttempts = step.RetryPolicy.MaxAttempts
@@ -173,9 +186,10 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			bo = backoff.WithContext(&backoff.StopBackOff{}, ctx)
 		}
 
-		attempts = 0
+		// Use the persisted attempt count instead of a local variable
 		operation := func() error {
-			attempts++
+			// Increment the attempt counter
+			w.StepRetryAttempts[stepIndex]++
 			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
 			if step.Timeout > 0 {
 				var cancel context.CancelFunc
@@ -197,7 +211,7 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			if errors.Is(stepErr, ErrFailWorkflowNow) {
 				return backoff.Permanent(stepErr)
 			}
-			if stepErr != nil && attempts < maxAttempts {
+			if stepErr != nil && w.StepRetryAttempts[stepIndex] < maxAttempts {
 				return stepErr
 			}
 			return backoff.Permanent(stepErr)
