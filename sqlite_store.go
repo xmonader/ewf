@@ -11,10 +11,23 @@ import (
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
-
 // SQLiteStore implements the Store interface using SQLite for persistence.
 type SQLiteStore struct {
 	db *sql.DB
+}
+
+func (s *SQLiteStore) prepTemplateTable() error {
+	q := `
+		CREATE TABLE IF NOT EXISTS workflow_templates (
+			name TEXT NOT NULL PRIMARY KEY UNIQUE,
+			data BLOB NOT NULL
+		);
+	`
+	_, err := s.db.Exec(q)
+	if err != nil {
+		return fmt.Errorf("failed to create workflow_templates table: %w", err)
+	}
+	return nil
 }
 
 // NewSQLiteStore creates a new SQLiteStore with the given DSN.
@@ -28,7 +41,13 @@ func NewSQLiteStore(dsn string) (*SQLiteStore, error) {
 
 // Setup prepares the SQLite database for use.
 func (s *SQLiteStore) Setup() error {
-	return s.prepWorkflowTable()
+	if err := s.prepWorkflowTable(); err != nil {
+		return err
+	}
+	if err := s.prepTemplateTable(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *SQLiteStore) prepWorkflowTable() error {
@@ -133,4 +152,78 @@ func (s *SQLiteStore) ListWorkflowUUIDsByStatus(ctx context.Context, status Work
 // Close closes the SQLite database connection.
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
+}
+
+// SaveWorkflowTemplate saves a workflow template to the SQLite database.
+func (s *SQLiteStore) SaveWorkflowTemplate(ctx context.Context, name string, tmpl *WorkflowTemplate) error {
+	type serializableTemplate struct {
+		Steps []Step `json:"steps"`
+	}
+	st := serializableTemplate{Steps: tmpl.Steps}
+	data, err := json.Marshal(st)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workflow template: %w", err)
+	}
+	q := `INSERT OR REPLACE INTO workflow_templates (name, data) VALUES (?, ?)`
+	_, err = s.db.ExecContext(ctx, q, name, data)
+	if err != nil {
+		return fmt.Errorf("sqlite store: failed to save workflow template %s: %w", name, err)
+	}
+	return nil
+}
+
+// LoadWorkflowTemplate loads a workflow template by name from the SQLite database.
+func (s *SQLiteStore) LoadWorkflowTemplate(ctx context.Context, name string) (*WorkflowTemplate, error) {
+	var data []byte
+	q := `SELECT data FROM workflow_templates WHERE name = ?`
+	err := s.db.QueryRowContext(ctx, q, name).Scan(&data)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("workflow template '%s' not found", name)
+		}
+		return nil, fmt.Errorf("sqlite store: failed to load workflow template %s: %w", name, err)
+	}
+	type serializableTemplate struct {
+		Steps []Step `json:"steps"`
+	}
+	var st serializableTemplate
+	if err := json.Unmarshal(data, &st); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal workflow template: %w", err)
+	}
+	return &WorkflowTemplate{Steps: st.Steps}, nil
+}
+
+// LoadAllWorkflowTemplates loads all workflow templates from the SQLite database.
+func (s *SQLiteStore) LoadAllWorkflowTemplates(ctx context.Context) (map[string]*WorkflowTemplate, error) {
+	q := `SELECT name, data FROM workflow_templates`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite store: failed to query workflow templates: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
+
+	templates := make(map[string]*WorkflowTemplate)
+	for rows.Next() {
+		var name string
+		var data []byte
+		if err := rows.Scan(&name, &data); err != nil {
+			return nil, fmt.Errorf("sqlite store: failed to scan workflow template: %w", err)
+		}
+		type serializableTemplate struct {
+			Steps []Step `json:"steps"`
+		}
+		var st serializableTemplate
+		if err := json.Unmarshal(data, &st); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal workflow template: %w", err)
+		}
+		templates[name] = &WorkflowTemplate{Steps: st.Steps}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite store: failed to iterate workflow templates: %w", err)
+	}
+	return templates, nil
 }

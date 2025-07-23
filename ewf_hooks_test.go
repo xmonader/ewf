@@ -29,7 +29,7 @@ func TestHooks_DoubleInvocationDueToSharedSlice(t *testing.T) {
 	}
 
 	tmpl := &WorkflowTemplate{
-		Steps: []Step{{Name: "step1"}},
+		Steps:               []Step{{Name: "step1"}},
 		BeforeWorkflowHooks: []BeforeWorkflowHook{beforeWorkflow},
 		AfterWorkflowHooks:  []AfterWorkflowHook{afterWorkflow},
 		BeforeStepHooks:     []BeforeStepHook{beforeStep},

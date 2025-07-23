@@ -3,9 +3,71 @@ package ewf
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
+
+func TestSQLiteStore_TemplatePersistence(t *testing.T) {
+	if err := os.Remove("test_templates.db"); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("failed to remove db: %v", err)
+	}
+	store, err := NewSQLiteStore("test_templates.db")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	}()
+	defer func() {
+		if err := os.Remove("test_templates.db"); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("failed to remove db: %v", err)
+		}
+	}()
+
+	if err := store.Setup(); err != nil {
+		t.Fatalf("failed to setup store: %v", err)
+	}
+
+	ctx := context.Background()
+
+	tmpl := &WorkflowTemplate{
+		Steps: []Step{{Name: "step1"}, {Name: "step2"}},
+	}
+	if err := store.SaveWorkflowTemplate(ctx, "tmpl1", tmpl); err != nil {
+		t.Fatalf("failed to save template: %v", err)
+	}
+
+	loaded, err := store.LoadWorkflowTemplate(ctx, "tmpl1")
+	if err != nil {
+		t.Fatalf("failed to load template: %v", err)
+	}
+	if len(loaded.Steps) != 2 || loaded.Steps[0].Name != "step1" || loaded.Steps[1].Name != "step2" {
+		t.Fatalf("loaded template mismatch: %+v", loaded)
+	}
+
+	// Save another template
+	tmpl2 := &WorkflowTemplate{Steps: []Step{{Name: "s3"}}}
+	if err := store.SaveWorkflowTemplate(ctx, "tmpl2", tmpl2); err != nil {
+		t.Fatalf("failed to save template2: %v", err)
+	}
+
+	all, err := store.LoadAllWorkflowTemplates(ctx)
+	if err != nil {
+		t.Fatalf("failed to load all templates: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 templates, got %d", len(all))
+	}
+	if _, ok := all["tmpl1"]; !ok {
+		t.Fatalf("tmpl1 not found in all templates")
+	}
+	if _, ok := all["tmpl2"]; !ok {
+		t.Fatalf("tmpl2 not found in all templates")
+	}
+}
 
 // TestWorkflow_Run_Simple tests a simple workflow run.
 func TestWorkflow_Run_Simple(t *testing.T) {
