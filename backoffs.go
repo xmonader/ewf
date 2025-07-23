@@ -1,23 +1,28 @@
 package ewf
 
 import (
-	"github.com/cenkalti/backoff/v4"
 	"time"
+
+	"github.com/cenkalti/backoff/v4"
 )
 
-// ConstantBackoff returns a backoff.BackOff that always waits for the specified delay.
-func ConstantBackoff(delay time.Duration) backoff.BackOff {
-	return backoff.NewConstantBackOff(delay)
+// ConstantBackoff returns a BackOffConfig for constant delays.
+func ConstantBackoff(delay time.Duration) BackOffConfig {
+	return BackOffConfig{
+		Type:     "constant",
+		Interval: delay,
+	}
 }
 
-// ExponentialBackoff returns a backoff.BackOff with exponential delays.
+// ExponentialBackoff returns a BackOffConfig for exponential delays.
 // initialInterval: first delay; maxInterval: cap for delay; multiplier: growth factor (e.g. 2.0).
-func ExponentialBackoff(initialInterval, maxInterval time.Duration, multiplier float64) backoff.BackOff {
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = initialInterval
-	bo.MaxInterval = maxInterval
-	bo.Multiplier = multiplier
-	return bo
+func ExponentialBackoff(initialInterval, maxInterval time.Duration, multiplier float64) BackOffConfig {
+	return BackOffConfig{
+		Type:        "exponential",
+		Interval:    initialInterval,
+		MaxInterval: maxInterval,
+		Multiplier:  multiplier,
+	}
 }
 
 // ZeroBackoff returns a backoff.BackOff that always returns zero delay (for immediate retries).

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
-	"time"
 )
 
 // ErrFailWorkflowNow is a special error that can be returned by a step to indicate that the workflow should be failed immediately.
@@ -51,7 +52,33 @@ type Step struct {
 // RetryPolicy defines the retry behavior for a step.
 type RetryPolicy struct {
 	MaxAttempts uint
-	BackOff     backoff.BackOff
+	BackOff     BackOffConfig `json:"BackOff"`
+}
+
+// BackOffConfig represents backoff configuration that can be easily serialized
+type BackOffConfig struct {
+	Type        string        `json:"Type"`                  // "constant" or "exponential"
+	Interval    time.Duration `json:"Interval"`              // For constant: the interval; for exponential: initial interval
+	MaxInterval time.Duration `json:"MaxInterval,omitempty"` // For exponential: maximum interval
+	Multiplier  float64       `json:"Multiplier,omitempty"`  // For exponential: growth factor
+}
+
+// ToBackOff converts the config to an actual backoff.BackOff implementation
+func (bc BackOffConfig) ToBackOff() backoff.BackOff {
+	switch bc.Type {
+	case "exponential":
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = bc.Interval
+		if bc.MaxInterval > 0 {
+			bo.MaxInterval = bc.MaxInterval
+		}
+		if bc.Multiplier > 0 {
+			bo.Multiplier = bc.Multiplier
+		}
+		return bo
+	default: // "constant" or any unknown type
+		return backoff.NewConstantBackOff(bc.Interval)
+	}
 }
 
 // BeforeWorkflowHook is a function run before a workflow starts.
@@ -161,8 +188,8 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 		var bo backoff.BackOff
 		var maxAttempts uint = 1
 		if step.RetryPolicy != nil {
-			if step.RetryPolicy.BackOff != nil {
-				bo = backoff.WithContext(step.RetryPolicy.BackOff, ctx)
+			if step.RetryPolicy.BackOff.Type != "" && step.RetryPolicy.BackOff.Interval > 0 {
+				bo = backoff.WithContext(step.RetryPolicy.BackOff.ToBackOff(), ctx)
 				if step.RetryPolicy.MaxAttempts > 0 {
 					maxAttempts = step.RetryPolicy.MaxAttempts
 				}
