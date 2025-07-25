@@ -93,7 +93,17 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 func (e *Engine) rehydrate(w *Workflow) error {
 	def, ok := e.templates[w.Name]
 	if !ok {
-		return fmt.Errorf("workflow template '%s' not registered", w.Name)
+		if e.store != nil {
+			var err error
+			def, err = e.store.LoadWorkflowTemplate(context.Background(), w.Name)
+			if err != nil {
+				return fmt.Errorf("workflow template '%s' not found in memory or database: %w", w.Name, err)
+			}
+
+			e.templates[w.Name] = def
+		} else {
+			return fmt.Errorf("workflow template '%s' not registered", w.Name)
+		}
 	}
 	w.SetStore(e.store) // Re-attach the store for resumed workflows
 	w.Steps = append([]Step{}, def.Steps...)
