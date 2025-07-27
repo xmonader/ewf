@@ -2,9 +2,9 @@ package ewf
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 	"time"
 )
@@ -51,7 +51,67 @@ type Step struct {
 // RetryPolicy defines the retry behavior for a step.
 type RetryPolicy struct {
 	MaxAttempts uint
-	BackOff     backoff.BackOff
+	BackOff     BackOff
+}
+
+// MarshalJSON implements custom JSON marshaling for RetryPolicy
+func (rp *RetryPolicy) MarshalJSON() ([]byte, error) {
+	if rp == nil {
+		return json.Marshal(nil)
+	}
+
+	var backoffData []byte
+	var err error
+	if rp.BackOff != nil {
+		backoffData, err = MarshalBackOff(rp.BackOff)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal BackOff: %w", err)
+		}
+	}
+
+	// Create a temporary struct to avoid infinite recursion
+	type RetryPolicyTemp struct {
+		MaxAttempts uint            `json:"max_attempts"`
+		BackOff     json.RawMessage `json:"backoff,omitempty"`
+	}
+
+	tmp := RetryPolicyTemp{
+		MaxAttempts: rp.MaxAttempts,
+		BackOff:     backoffData,
+	}
+
+	return json.Marshal(tmp)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for RetryPolicy
+func (rp *RetryPolicy) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" || len(data) == 0 {
+		*rp = RetryPolicy{}
+		return nil
+	}
+
+	// Create a temporary struct to avoid infinite recursion
+	type RetryPolicyTemp struct {
+		MaxAttempts uint            `json:"max_attempts"`
+		BackOff     json.RawMessage `json:"backoff,omitempty"`
+	}
+
+	var tmp RetryPolicyTemp
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	rp.MaxAttempts = tmp.MaxAttempts
+
+	if len(tmp.BackOff) > 0 {
+		backoff, err := UnmarshalBackOff(tmp.BackOff)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal BackOff: %w", err)
+		}
+		rp.BackOff = backoff
+	}
+
+	return nil
 }
 
 // BeforeWorkflowHook is a function run before a workflow starts.
@@ -87,9 +147,9 @@ type Workflow struct {
 	State       State          `json:"state"`
 	CurrentStep int            `json:"current_step"`
 	CreatedAt   time.Time      `json:"created_at"`
+	Steps       []Step         `json:"steps"`
 
 	// non persisted fields
-	Steps               []Step               `json:"-"`
 	store               Store                `json:"-"`
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`
 	afterWorkflowHooks  []AfterWorkflowHook  `json:"-"`
@@ -158,11 +218,11 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 			return fmt.Errorf("activity '%s' not registered", step.Name)
 		}
 
-		var bo backoff.BackOff
+		var bo BackOff
 		var maxAttempts uint = 1
 		if step.RetryPolicy != nil {
 			if step.RetryPolicy.BackOff != nil {
-				bo = backoff.WithContext(step.RetryPolicy.BackOff, ctx)
+				bo = WithContext(step.RetryPolicy.BackOff, ctx)
 				if step.RetryPolicy.MaxAttempts > 0 {
 					maxAttempts = step.RetryPolicy.MaxAttempts
 				}
@@ -170,7 +230,7 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 		}
 		if bo == nil {
 			// No retry policy or BackOff: single attempt, no retry
-			bo = backoff.WithContext(&backoff.StopBackOff{}, ctx)
+			bo = WithContext(NewStopBackOff(), ctx)
 		}
 
 		attempts = 0
@@ -195,15 +255,19 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
 			}
 			if errors.Is(stepErr, ErrFailWorkflowNow) {
-				return backoff.Permanent(stepErr)
+				return PermanentError(stepErr)
 			}
-			if stepErr != nil && attempts < maxAttempts {
-				return stepErr
+			// Only return permanent error when we've exhausted retries or if the error is nil
+			if stepErr != nil {
+				if attempts >= maxAttempts {
+					return PermanentError(stepErr) // Mark as permanent on last attempt
+				}
+				return stepErr // Regular error for retry
 			}
-			return backoff.Permanent(stepErr)
+			return nil // No error
 		}
 
-		if err := backoff.Retry(operation, bo); err != nil {
+		if err := Retry(operation, bo); err != nil {
 			stepErr = err
 		}
 		// After backoff.Retry, stepErr has the last error (or nil)

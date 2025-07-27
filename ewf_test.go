@@ -85,7 +85,7 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 
 	step1Done := false
 	engine.Register("step1", func(ctx context.Context, state State) error {
-		return fmt.Errorf("transient error")
+		return PermanentError(fmt.Errorf("transient error"))
 	})
 
 	var step2Done bool
@@ -143,6 +143,7 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 	engine.Register("step1", func(ctx context.Context, state State) error {
 		step1Attempts++
 		if step1Attempts < 3 {
+			// Return a regular error for retry
 			return fmt.Errorf("transient error")
 		}
 		step1Done = true
@@ -434,6 +435,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 
 		// Simulate crash by returning error (only on first execution)
 		if apiCalls == 1 {
+			// Use a regular error to allow retries
 			return fmt.Errorf("simulated crash")
 		}
 		return nil

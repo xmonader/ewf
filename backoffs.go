@@ -1,26 +1,28 @@
 package ewf
 
 import (
-	"github.com/cenkalti/backoff/v4"
 	"time"
 )
 
-// ConstantBackoff returns a backoff.BackOff that always waits for the specified delay.
-func ConstantBackoff(delay time.Duration) backoff.BackOff {
-	return backoff.NewConstantBackOff(delay)
+// ConstantBackoff returns a BackOff that always waits for the specified delay.
+func ConstantBackoff(delay time.Duration) BackOff {
+	return NewConstantBackOff(delay)
 }
 
-// ExponentialBackoff returns a backoff.BackOff with exponential delays.
+// ExponentialBackoff returns a BackOff with exponential delays.
 // initialInterval: first delay; maxInterval: cap for delay; multiplier: growth factor (e.g. 2.0).
-func ExponentialBackoff(initialInterval, maxInterval time.Duration, multiplier float64) backoff.BackOff {
-	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = initialInterval
-	bo.MaxInterval = maxInterval
-	bo.Multiplier = multiplier
-	return bo
+func ExponentialBackoff(initialInterval, maxInterval time.Duration, multiplier float64) BackOff {
+	return NewExponentialBackOff(initialInterval, maxInterval, multiplier)
 }
 
-// ZeroBackoff returns a backoff.BackOff that always returns zero delay (for immediate retries).
-func ZeroBackoff() backoff.BackOff {
-	return backoff.NewConstantBackOff(0)
+// ExponentialBackoffWithJitter returns a BackOff with exponential delays and jitter.
+// initialInterval: first delay; maxInterval: cap for delay; multiplier: growth factor (e.g. 2.0).
+// jitter: randomization factor between 0 and 1 that determines the amount of randomness.
+func ExponentialBackoffWithJitter(initialInterval, maxInterval time.Duration, multiplier float64, jitter float64) BackOff {
+	return NewExponentialBackOffWithJitter(initialInterval, maxInterval, multiplier, jitter)
+}
+
+// ZeroBackoff returns a BackOff that always returns zero delay (for immediate retries).
+func ZeroBackoff() BackOff {
+	return NewZeroBackOff()
 }
