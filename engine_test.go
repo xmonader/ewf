@@ -29,8 +29,12 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 	defer func() {
-		store.Close()
-		os.Remove(dbFile)
+		if err := store.Close(); err != nil {
+			t.Logf("Failed to close store: %v", err)
+		}
+		if err := os.Remove(dbFile); err != nil {
+			t.Logf("Failed to remove db file: %v", err)
+		}
 	}()
 	if err := store.Setup(); err != nil {
 		t.Fatalf("failed to setup store: %v", err)

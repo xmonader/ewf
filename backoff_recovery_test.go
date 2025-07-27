@@ -73,7 +73,11 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Logf("Failed to close store: %v", err)
+		}
+	}()
 	
 	// Create an engine
 	engine, err := NewEngine(store)

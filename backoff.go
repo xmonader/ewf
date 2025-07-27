@@ -410,10 +410,7 @@ func RetryNotify(operation func() error, b BackOff, notify func(error, time.Dura
 		}
 
 		t := time.NewTimer(next)
-		select {
-		case <-t.C:
-			// continue
-		}
+		<-t.C
 		t.Stop()
 	}
 }
