@@ -18,6 +18,7 @@ import (
 // App holds the application's dependencies.
 type App struct {
 	engine *ewf.Engine
+	store  *ewf.SQLiteStore
 	router *mux.Router
 	logger *log.Logger
 }
@@ -30,11 +31,6 @@ func NewApp(logger *log.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sqlite store: %v", err)
 	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			log.Printf("failed to close store: %v", err)
-		}
-	}()
 	engine, err := ewf.NewEngine(store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %v", err)
@@ -42,6 +38,7 @@ func NewApp(logger *log.Logger) (*App, error) {
 
 	app := &App{
 		engine: engine,
+		store:  store,
 		router: mux.NewRouter(),
 		logger: logger,
 	}
@@ -51,6 +48,14 @@ func NewApp(logger *log.Logger) (*App, error) {
 	app.setupRoutes()
 
 	return app, nil
+}
+
+// Close closes the application's resources.
+func (a *App) Close() error {
+	if a.store != nil {
+		return a.store.Close()
+	}
+	return nil
 }
 
 // Run starts the application.
@@ -146,6 +151,11 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to create app: %v", err)
 	}
+	defer func() {
+		if err := app.Close(); err != nil {
+			logger.Printf("failed to close app: %v", err)
+		}
+	}()
 
 	if err := app.Run(); err != nil {
 		logger.Fatalf("failed to run app: %v", err)

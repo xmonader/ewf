@@ -39,9 +39,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create sqlite store: %v", err)
 	}
-	if err := store.Close(); err != nil {
-		log.Printf("failed to close store: %v", err)
-	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			log.Printf("failed to close store: %v", err)
+		}
+	}()
 
 	engine, err := ewf.NewEngine(store)
 	if err != nil {
