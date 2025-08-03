@@ -86,8 +86,11 @@ func main() {
 	}
 	defer store.Close()
 
-	// 2. Create a new engine.
-	engine, err := ewf.NewEngine(store)
+	// With logger 
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	// 2. Create a new engine. (adding logger is optional)
+	engine, err := ewf.NewEngine(store, ewf.WithLogger(ewf.NewZerologAdapter(logger)))
 	if err != nil {
 		log.Fatalf("engine error: %v", err)
 	}

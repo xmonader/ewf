@@ -18,6 +18,7 @@ type Engine struct {
 	activities  map[string]StepFn
 	templates   map[string]*WorkflowTemplate
 	store       Store
+	logger     Logger
 	mu          sync.RWMutex
 	queueEngine QueueEngine
 }
@@ -69,10 +70,12 @@ func WithQueueEngine(queueEngine QueueEngine) EngineOption {
 }
 
 // NewEngine creates a new workflow engine.
-func NewEngine(opts ...EngineOption) (*Engine, error) {
+// NewEngine creates a new workflow engine.
+func NewEngine(store Store, opts ...EngineOption) (*Engine, error) {
 	engine := &Engine{
 		activities: make(map[string]StepFn),
 		templates:  make(map[string]*WorkflowTemplate),
+		store:      store,
 	}
 
 	for _, opt := range opts {
@@ -108,6 +111,16 @@ func NewEngine(opts ...EngineOption) (*Engine, error) {
 	}
 
 	return engine, nil
+}
+
+// EngineOption is a functional option for configuring an Engine.
+type EngineOption func(*Engine)
+
+// WithLogger sets the logger for the engine.
+func WithLogger(logger Logger) EngineOption {
+	return func(e *Engine) {
+		e.logger = logger
+	}
 }
 
 // Register registers an activity function with the engine.
@@ -360,8 +373,11 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 
 	go func() {
 		if err := e.RunSync(ctx, w); err != nil {
-			// In a real application, you'd use a structured logger.
-			log.Printf("async workflow %s failed: %v", w.UUID, err)
+			if e.logger != nil {
+				e.logger.Error().Err(err).Str("workflow_uuid", w.UUID).Msg("async workflow failed")
+			} else {
+				log.Printf("async workflow %s failed: %v", w.UUID, err)
+			}
 		}
 	}()
 
@@ -376,23 +392,44 @@ func (e *Engine) ResumeRunningWorkflows() {
 
 		uuids, err := e.Store().ListWorkflowUUIDsByStatus(ctx, StatusRunning)
 		if err != nil {
-			log.Printf("error listing workflows for resumption: %v", err)
+			if e.logger != nil {
+				e.logger.Error().Err(err).Msg("error listing workflows for resumption")
+			} else {
+				log.Printf("error listing workflows for resumption: %v", err)
+			}
 			return
+
 		}
 
 		if len(uuids) == 0 {
-			log.Println("No pending workflows to resume.")
+			if e.logger != nil {
+				e.logger.Info().Msg("No pending workflows to resume")
+			} else {
+				log.Println("No pending workflows to resume.")
+			}
 			return
 		}
 
-		log.Printf("Resuming %d pending workflows in the background...", len(uuids))
+		if e.logger != nil {
+			e.logger.Info().Int("count", len(uuids)).Msg("Resuming pending workflows in the background")
+		} else {
+			log.Printf("Resuming %d pending workflows in the background...", len(uuids))
+		}
 		for _, id := range uuids {
 			wf, err := e.Store().LoadWorkflowByUUID(ctx, id)
 			if err != nil {
-				log.Printf("failed to load workflow %s for resumption: %v", id, err)
+				if e.logger != nil {
+					e.logger.Error().Err(err).Str("workflow_uuid", id).Msg("failed to load workflow for resumption")
+				} else {
+					log.Printf("failed to load workflow %s for resumption: %v", id, err)
+				}
 				continue
 			}
-			log.Printf("Resuming workflow %s", wf.UUID)
+			if e.logger != nil {
+				e.logger.Info().Str("workflow_uuid", wf.UUID).Msg("Resuming workflow")
+			} else {
+				log.Printf("Resuming workflow %s", wf.UUID)
+			}
 			err = e.RunAsync(ctx, wf)
 			if err != nil {
 				log.Printf("failed to resume workflow %s: %v", wf.UUID, err)
