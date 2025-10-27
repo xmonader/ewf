@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/xmonader/ewf"
 )
+
 // Queue represents a workflow queue
 type Queue interface {
 	Name() string
@@ -32,6 +33,8 @@ type QueueOptions struct {
 
 var _ Queue = (*RedisQueue)(nil)
 
+type Processor func(ctx context.Context, wf *ewf.Workflow) error
+
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
 	name         string
@@ -40,6 +43,7 @@ type RedisQueue struct {
 	queueOptions QueueOptions
 	client       *redis.Client
 	ch           chan struct{}
+	processor    Processor
 }
 
 // Name returns the name of the queue
@@ -83,6 +87,19 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*ewf.Workflow, error) {
 	return &wf, nil
 }
 
+// Start begins processing workflows in the queue using the provided processor function
+func (q *RedisQueue) Start(ctx context.Context, proc Processor) {
+	if proc == nil {
+		panic("processor cannot be nil")
+	}
+
+	q.processor = proc
+	if q.ch == nil {
+		q.ch = make(chan struct{})
+	}
+	go q.workerLoop(ctx)
+}
+
 // Close closes the queue and deletes it after DeleteAfter duration if AutoDelete is set
 func (q *RedisQueue) Close(ctx context.Context) error {
 	close(q.ch)
@@ -117,8 +134,18 @@ func (q *RedisQueue) workerLoop(ctx context.Context) {
 					if wf == nil {
 						continue
 					}
+					
 					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
-					// TODO: process workflow
+
+					if q.processor == nil {
+						fmt.Printf("Worker %d: no processor configured\n", workerID)
+						continue
+					}
+					if err := q.processor(ctx, wf); err != nil {
+						fmt.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+						continue
+					}
+					fmt.Printf("Worker %d: finished workflow %s\n", workerID, wf.Name)
 				}
 			}
 		}(i)

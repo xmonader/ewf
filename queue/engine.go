@@ -55,7 +55,6 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 		ch:           make(chan struct{}),
 	}
 	e.queues[queueName] = q
-	q.workerLoop(ctx)
 
 	return q, nil
 }
