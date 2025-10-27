@@ -8,6 +8,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var ErrQueueNotFound = fmt.Errorf("queue not found")
+
 // QueueEngine defines the interface for a queue engine that manages multiple queues
 type QueueEngine interface {
 	CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error)
@@ -66,7 +68,7 @@ func (e *RedisQueueEngine) GetQueue(ctx context.Context, queueName string) (Queu
 
 	q, ok := e.queues[queueName]
 	if !ok {
-		return nil, fmt.Errorf("queue %s does not exist", queueName)
+		return nil, ErrQueueNotFound
 	}
 
 	return q, nil
@@ -79,7 +81,7 @@ func (e *RedisQueueEngine) CloseQueue(ctx context.Context, queueName string) err
 
 	q, ok := e.queues[queueName]
 	if !ok {
-		return fmt.Errorf("queue %s does not exist", queueName)
+		return ErrQueueNotFound
 	}
 
 	q.Close(ctx)
