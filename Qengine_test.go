@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
 )
 
 func TestCreateAndGetQueue(t *testing.T) {
@@ -104,6 +103,7 @@ func TestCloseQueue(t *testing.T) {
 
 func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(context.Background())
 
 	for i := 0; i < 3; i++ {
 		store, err := NewSQLiteStore("test.db")
@@ -145,3 +145,48 @@ func TestCloseEngine(t *testing.T) {
 	}
 }
 
+func TestAutoDelete(t *testing.T) {
+	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(context.Background())
+
+	store, err := NewSQLiteStore("test.db")
+	if err != nil {
+		t.Fatalf("store error: %v", err)
+	}
+	defer store.Close()
+
+	wfengine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
+
+	q, err := engine.CreateQueue(
+		context.Background(),
+		"test-queue",
+		"test-workflow",
+		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
+		QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
+		wfengine,
+	)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	// wait for longer than DeleteAfter duration
+	time.Sleep(5 * time.Second)
+
+	
+	// check if the queue itself is removed from redis
+	exists, err := q.(*RedisQueue).client.Exists(context.Background(), "test-queue").Result()
+	if err != nil {
+		t.Fatalf("failed to check queue existence: %v", err)
+	}
+	if exists != 0 {
+		t.Errorf("expected queue to be deleted from Redis")
+	}
+
+	// check if the queue is removed from engine's map
+	_, err = engine.GetQueue(context.Background(), "test-queue")
+	if err != ErrQueueNotFound {
+		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
+	}
+}

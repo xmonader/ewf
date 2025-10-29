@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -32,7 +31,6 @@ type QueueOptions struct {
 }
 
 var _ Queue = (*RedisQueue)(nil)
-var deleteOnce sync.Once
 
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
@@ -46,7 +44,7 @@ type RedisQueue struct {
 	onDelete     func(string)
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine,onDelete func(string)) *RedisQueue {
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine, onDelete func(string)) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		workflowName: workflowName,
@@ -83,7 +81,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 // Dequeue retrieves and removes a workflow from the queue
 func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
-	res, err := q.client.BRPop(ctx, 5*time.Second, q.name).Result()
+	res, err := q.client.BRPop(ctx, 1*time.Second, q.name).Result()
 
 	if err == redis.Nil {
 		return nil, err
@@ -158,16 +156,14 @@ func (q *RedisQueue) workerLoop(ctx context.Context) {
 
 								if err == nil && length == 0 {
 
-									deleteOnce.Do(func() { // ensure single deletion
-										fmt.Printf("auto-deleting empty queue: %s\n", q.name)
-										if err := q.deleteQueue(ctx); err != nil {
-											fmt.Println("deleteQueue error:", err)
-										}
-										close(q.closeCh)
-										if q.onDelete != nil {
-											q.onDelete(q.name)
-										}
-									})
+									fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+									if err := q.deleteQueue(ctx); err != nil {
+										fmt.Println("deleteQueue error:", err)
+									}
+									close(q.closeCh)
+									if q.onDelete != nil {
+										q.onDelete(q.name)
+									}
 									return
 								}
 							}

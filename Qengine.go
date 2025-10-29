@@ -42,9 +42,9 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 // CreateQueue creates a new queue with the specified parameters
 func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine) (Queue, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	if _, ok := e.queues[queueName]; ok {
+		e.mu.Unlock()
 		return nil, fmt.Errorf("queue %s already exists", queueName)
 	}
 
@@ -56,10 +56,14 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 		e.client,
 		wfEngine,
 		func(name string) {
+			e.mu.Lock()
+			defer e.mu.Unlock()
 			delete(e.queues, name)
 		})
 
 	e.queues[queueName] = q
+	e.mu.Unlock()
+	
 	q.workerLoop(ctx)
 
 	return q, nil
