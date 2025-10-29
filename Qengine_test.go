@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// TestCreateAndGetQueue creates a queue engine, creates a queue, gets the created queue, and tries to get a non existing queue 
 func TestCreateAndGetQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 	defer engine.Close(context.Background())
@@ -55,6 +56,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 
 }
 
+// TestCloseQueue tests closing a queue and trying to get a closed queue, and closing a non existing queue
 func TestCloseQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 	defer engine.Close(context.Background())
@@ -101,6 +103,7 @@ func TestCloseQueue(t *testing.T) {
 	}
 }
 
+// TestCloseEngine tests closing the engine with multiple queues and ensures all queues are closed, and tries to get a queue after engine is closed
 func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 	defer engine.Close(context.Background())
@@ -145,6 +148,7 @@ func TestCloseEngine(t *testing.T) {
 	}
 }
 
+// TestAutoDelete tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map
 func TestAutoDelete(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 	defer engine.Close(context.Background())
@@ -189,3 +193,4 @@ func TestAutoDelete(t *testing.T) {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
 }
+
