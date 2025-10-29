@@ -1,14 +1,27 @@
-package queue
+package ewf
 
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
+
 )
 
 func TestCreateAndGetQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(context.Background())
+
+	store, err := NewSQLiteStore("test.db")
+	if err != nil {
+		t.Fatalf("store error: %v", err)
+	}
+	defer store.Close()
+
+	wfengine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
 
 	q, err := engine.CreateQueue(
 		context.Background(),
@@ -16,6 +29,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
+		wfengine,
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
@@ -44,14 +58,28 @@ func TestCreateAndGetQueue(t *testing.T) {
 
 func TestCloseQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(context.Background())
 
-	_, err := engine.CreateQueue(
+	store, err := NewSQLiteStore("test.db")
+	if err != nil {
+		t.Fatalf("store error: %v", err)
+	}
+	defer store.Close()
+
+	wfengine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
+
+	_, err = engine.CreateQueue(
 		context.Background(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
+		wfengine,
 	)
+
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
 	}
@@ -78,12 +106,24 @@ func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 
 	for i := 0; i < 3; i++ {
-		_, err := engine.CreateQueue(
+		store, err := NewSQLiteStore("test.db")
+		if err != nil {
+			t.Fatalf("store error: %v", err)
+		}
+		defer store.Close()
+
+		wfengine, err := NewEngine(store)
+		if err != nil {
+			t.Fatalf("wf engine error: %v", err)
+		}
+
+		_, err = engine.CreateQueue(
 			context.Background(),
 			fmt.Sprintf("test-queue-%d", i),
 			"test-workflow",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
+			wfengine,
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
@@ -104,3 +144,4 @@ func TestCloseEngine(t *testing.T) {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
 }
+

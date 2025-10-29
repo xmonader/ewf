@@ -1,9 +1,10 @@
-package queue
+package ewf
 
 import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -12,7 +13,7 @@ var ErrQueueNotFound = fmt.Errorf("queue not found")
 
 // QueueEngine defines the interface for a queue engine that manages multiple queues
 type QueueEngine interface {
-	CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error)
+	CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine) (Queue, error)
 	GetQueue(ctx context.Context, queueName string) (Queue, error)
 	CloseQueue(ctx context.Context, queueName string) error
 	Close(ctx context.Context) error
@@ -40,7 +41,7 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 }
 
 // CreateQueue creates a new queue with the specified parameters
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -48,15 +49,16 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 		return nil, fmt.Errorf("queue %s already exists", queueName)
 	}
 
-	q := &RedisQueue{
-		name:         queueName,
-		workflowName: workflowName,
-		workersDef:   workersDefinition,
-		queueOptions: queueOptions,
-		client:       e.client,
-		ch:           make(chan struct{}),
-	}
+	q := NewRedisQueue(
+		queueName,
+		workflowName,
+		workersDefinition,
+		queueOptions,
+		e.client,
+		wfEngine)
+
 	e.queues[queueName] = q
+	q.workerLoop(ctx)
 
 	return q, nil
 }
@@ -84,8 +86,19 @@ func (e *RedisQueueEngine) CloseQueue(ctx context.Context, queueName string) err
 		return ErrQueueNotFound
 	}
 
-	q.Close(ctx)
-	delete(e.queues, queueName)
+	if err := q.Close(ctx); err != nil {
+		return err
+	}
+
+	if q.queueOptions.AutoDelete {
+		go func() {
+			time.Sleep(q.queueOptions.DeleteAfter)
+			delete(e.queues, queueName)
+		}()
+	} else {
+		delete(e.queues, queueName)
+	}
+
 	return nil
 }
 

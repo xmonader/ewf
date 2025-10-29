@@ -1,4 +1,4 @@
-package queue
+package ewf
 
 import (
 	"context"
@@ -7,15 +7,14 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/xmonader/ewf"
 )
 
 // Queue represents a workflow queue
 type Queue interface {
 	Name() string
 	WorkflowName() string
-	Enqueue(ctx context.Context, workflow *ewf.Workflow) error
-	Dequeue(ctx context.Context) (*ewf.Workflow, error)
+	Enqueue(ctx context.Context, workflow *Workflow) error
+	Dequeue(ctx context.Context) (*Workflow, error)
 	Close(ctx context.Context) error
 }
 
@@ -33,7 +32,6 @@ type QueueOptions struct {
 
 var _ Queue = (*RedisQueue)(nil)
 
-type Processor func(ctx context.Context, wf *ewf.Workflow) error
 
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
@@ -43,7 +41,19 @@ type RedisQueue struct {
 	queueOptions QueueOptions
 	client       *redis.Client
 	ch           chan struct{}
-	processor    Processor
+	wfEngine	 *Engine
+}
+
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client,wfEngine *Engine) *RedisQueue {
+		return &RedisQueue{
+		name:         queueName,
+		workflowName: workflowName,
+		workersDef:   workersDefinition,
+		queueOptions: queueOptions,
+		client:       client,
+		ch:           make(chan struct{}),
+		wfEngine:    wfEngine,
+	}
 }
 
 // Name returns the name of the queue
@@ -57,7 +67,7 @@ func (q *RedisQueue) WorkflowName() string {
 }
 
 // Enqueue adds a workflow to the queue
-func (q *RedisQueue) Enqueue(ctx context.Context, workflow *ewf.Workflow) error {
+func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 
 	data, err := json.Marshal(workflow)
 	if err != nil {
@@ -68,7 +78,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *ewf.Workflow) error 
 }
 
 // Dequeue retrieves and removes a workflow from the queue
-func (q *RedisQueue) Dequeue(ctx context.Context) (*ewf.Workflow, error) {
+func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
 	res, err := q.client.BRPop(ctx, 5*time.Second, q.name).Result()
 
@@ -79,7 +89,7 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*ewf.Workflow, error) {
 		return nil, fmt.Errorf("dequeue error %w", err)
 	}
 
-	var wf ewf.Workflow
+	var wf Workflow
 	if err := json.Unmarshal([]byte(res[1]), &wf); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal workflow %w", err)
 	}
@@ -87,29 +97,17 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*ewf.Workflow, error) {
 	return &wf, nil
 }
 
-// Start begins processing workflows in the queue using the provided processor function
-func (q *RedisQueue) Start(ctx context.Context, proc Processor) {
-	if proc == nil {
-		panic("processor cannot be nil")
-	}
-
-	q.processor = proc
-	if q.ch == nil {
-		q.ch = make(chan struct{})
-	}
-	go q.workerLoop(ctx)
-}
-
 // Close closes the queue and deletes it after DeleteAfter duration if AutoDelete is set
 func (q *RedisQueue) Close(ctx context.Context) error {
-	close(q.ch)
 
-	if q.queueOptions.AutoDelete {
-		go func() {
-			time.Sleep(q.queueOptions.DeleteAfter)
-			q.client.Del(ctx, q.name)
-		}()
+	if q.ch != nil {
+		select {
+		case <-q.ch: // already closed
+		default:
+			close(q.ch)
+		}
 	}
+
 	return nil
 }
 
@@ -134,18 +132,15 @@ func (q *RedisQueue) workerLoop(ctx context.Context) {
 					if wf == nil {
 						continue
 					}
-					
+
 					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
 
-					if q.processor == nil {
-						fmt.Printf("Worker %d: no processor configured\n", workerID)
-						continue
-					}
-					if err := q.processor(ctx, wf); err != nil {
+					if err := q.wfEngine.RunSync(ctx, wf); err != nil {
 						fmt.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
-						continue
+					} else {
+						fmt.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
 					}
-					fmt.Printf("Worker %d: finished workflow %s\n", workerID, wf.Name)
+					
 				}
 			}
 		}(i)
