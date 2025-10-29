@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -55,7 +54,10 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 		workersDefinition,
 		queueOptions,
 		e.client,
-		wfEngine)
+		wfEngine,
+		func(name string) {
+			delete(e.queues, name)
+		})
 
 	e.queues[queueName] = q
 	q.workerLoop(ctx)
@@ -90,14 +92,7 @@ func (e *RedisQueueEngine) CloseQueue(ctx context.Context, queueName string) err
 		return err
 	}
 
-	if q.queueOptions.AutoDelete {
-		go func() {
-			time.Sleep(q.queueOptions.DeleteAfter)
-			delete(e.queues, queueName)
-		}()
-	} else {
-		delete(e.queues, queueName)
-	}
+	delete(e.queues, queueName)
 
 	return nil
 }

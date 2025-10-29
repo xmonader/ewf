@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -31,7 +32,7 @@ type QueueOptions struct {
 }
 
 var _ Queue = (*RedisQueue)(nil)
-
+var deleteOnce sync.Once
 
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
@@ -40,19 +41,21 @@ type RedisQueue struct {
 	workersDef   WorkersDefinition
 	queueOptions QueueOptions
 	client       *redis.Client
-	ch           chan struct{}
-	wfEngine	 *Engine
+	closeCh      chan struct{}
+	wfEngine     *Engine
+	onDelete     func(string)
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client,wfEngine *Engine) *RedisQueue {
-		return &RedisQueue{
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine,onDelete func(string)) *RedisQueue {
+	return &RedisQueue{
 		name:         queueName,
 		workflowName: workflowName,
 		workersDef:   workersDefinition,
 		queueOptions: queueOptions,
 		client:       client,
-		ch:           make(chan struct{}),
-		wfEngine:    wfEngine,
+		closeCh:      make(chan struct{}),
+		wfEngine:     wfEngine,
+		onDelete:     onDelete,
 	}
 }
 
@@ -83,7 +86,7 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	res, err := q.client.BRPop(ctx, 5*time.Second, q.name).Result()
 
 	if err == redis.Nil {
-		return nil, nil
+		return nil, err
 	}
 	if err != nil {
 		return nil, fmt.Errorf("dequeue error %w", err)
@@ -97,41 +100,81 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	return &wf, nil
 }
 
-// Close closes the queue and deletes it after DeleteAfter duration if AutoDelete is set
-func (q *RedisQueue) Close(ctx context.Context) error {
-
-	if q.ch != nil {
-		select {
-		case <-q.ch: // already closed
-		default:
-			close(q.ch)
-		}
+func (q *RedisQueue) deleteQueue(ctx context.Context) error {
+	if err := q.client.Del(ctx, q.name).Err(); err != nil {
+		return fmt.Errorf("failed to delete queue %s: %v", q.name, err)
 	}
 
 	return nil
 }
 
+// Close closes the queue and deletes it after DeleteAfter duration if AutoDelete is set
+func (q *RedisQueue) Close(ctx context.Context) error {
+
+	if q.closeCh != nil {
+		select {
+		case <-q.closeCh: // already closed
+		default:
+			close(q.closeCh)
+		}
+	}
+
+	return q.deleteQueue(ctx)
+}
+
 func (q *RedisQueue) workerLoop(ctx context.Context) {
 	for i := 0; i < q.workersDef.Count; i++ {
-		ticker := time.NewTicker(q.workersDef.PollInterval)
-		defer ticker.Stop()
 
 		go func(workerID int) {
+			ticker := time.NewTicker(q.workersDef.PollInterval)
+			defer ticker.Stop()
+
+			var idleSince *time.Time
+
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case <-q.ch:
+				case <-q.closeCh:
 					return
 				case <-ticker.C:
 					wf, err := q.Dequeue(ctx)
-					if err != nil {
+
+					if err != nil && err != redis.Nil {
 						fmt.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
 						continue
 					}
-					if wf == nil {
+
+					if wf == nil { // empty queue
+						if q.queueOptions.AutoDelete {
+							now := time.Now()
+
+							if idleSince == nil {
+								idleSince = &now
+							}
+
+							if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
+								length, err := q.client.LLen(ctx, q.name).Result()
+
+								if err == nil && length == 0 {
+
+									deleteOnce.Do(func() { // ensure single deletion
+										fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+										if err := q.deleteQueue(ctx); err != nil {
+											fmt.Println("deleteQueue error:", err)
+										}
+										close(q.closeCh)
+										if q.onDelete != nil {
+											q.onDelete(q.name)
+										}
+									})
+									return
+								}
+							}
+						}
 						continue
 					}
+					idleSince = nil // reset idle timer
 
 					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
 
@@ -140,7 +183,7 @@ func (q *RedisQueue) workerLoop(ctx context.Context) {
 					} else {
 						fmt.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
 					}
-					
+
 				}
 			}
 		}(i)
