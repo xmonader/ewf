@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -39,8 +40,13 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 	}
 }
 
-// CreateQueue creates a new queue with the specified parameters
+// CreateQueue creates a new queue and uses 0 timeout by default for dequeue operations
 func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine) (Queue, error) {
+    return e.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, wfEngine, 0)
+}
+
+// CreateQueue creates a new queue and uses the passes timeout for dequeue operations
+func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine, popTimeout time.Duration) (Queue, error) {
 	e.mu.Lock()
 
 	if _, ok := e.queues[queueName]; ok {
@@ -59,11 +65,13 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 			e.mu.Lock()
 			defer e.mu.Unlock()
 			delete(e.queues, name)
-		})
+		},
+		popTimeout,
+	)
 
 	e.queues[queueName] = q
 	e.mu.Unlock()
-	
+
 	q.workerLoop(ctx)
 
 	return q, nil

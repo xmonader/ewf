@@ -42,9 +42,10 @@ type RedisQueue struct {
 	closeCh      chan struct{}
 	wfEngine     *Engine
 	onDelete     func(string)
+	popTimeout   time.Duration
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine, onDelete func(string)) *RedisQueue {
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine, onDelete func(string), popTimeout time.Duration) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		workflowName: workflowName,
@@ -54,6 +55,7 @@ func NewRedisQueue(queueName string, workflowName string, workersDefinition Work
 		closeCh:      make(chan struct{}),
 		wfEngine:     wfEngine,
 		onDelete:     onDelete,
+		popTimeout:   popTimeout,
 	}
 }
 
@@ -81,7 +83,13 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 // Dequeue retrieves and removes a workflow from the queue
 func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
-	res, err := q.client.BRPop(ctx, 1*time.Second, q.name).Result()
+	// default timeout to 1 second if not set
+	timeout := q.popTimeout
+	if timeout <= 0 {
+		timeout = 1 * time.Second
+	}
+
+	res, err := q.client.BRPop(ctx, timeout, q.name).Result()
 
 	if err == redis.Nil {
 		return nil, err

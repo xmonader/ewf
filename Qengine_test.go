@@ -174,7 +174,6 @@ func TestAutoDelete(t *testing.T) {
 	// wait for longer than DeleteAfter duration
 	time.Sleep(5 * time.Second)
 
-	
 	// check if the queue itself is removed from redis
 	exists, err := q.(*RedisQueue).client.Exists(context.Background(), "test-queue").Result()
 	if err != nil {
