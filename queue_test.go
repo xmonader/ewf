@@ -1,7 +1,6 @@
 package ewf
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -19,7 +18,12 @@ func TestEnqueueDequeue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	queue := NewRedisQueue(
 		"test-queue",
@@ -31,17 +35,21 @@ func TestEnqueueDequeue(t *testing.T) {
 		nil,
 		1*time.Second,
 	)
-	defer queue.Close(context.Background())
+	defer func() {
+		if err := queue.Close(t.Context()); err != nil {
+			t.Errorf("failed to close queue: %v", err)
+		}
+	}()
 
 	for i := 0; i < 5; i++ {
 		workflow := NewWorkflow(fmt.Sprintf("test-workflow%d", i), WithStore(store))
-		err = queue.Enqueue(context.Background(), workflow)
+		err = queue.Enqueue(t.Context(), workflow)
 		if err != nil {
 			t.Fatalf("failed to enqueue workflow: %v", err)
 		}
 	}
 
-	len, err := queue.client.LLen(context.Background(), "test-queue").Result()
+	len, err := queue.client.LLen(t.Context(), "test-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to get queue length: %v", err)
 	}
@@ -52,7 +60,7 @@ func TestEnqueueDequeue(t *testing.T) {
 
 	// dequeue workflows and check they exist and their names (to check the dequeue order)
 	for i := 0; i < 5; i++ {
-		wf, err := queue.Dequeue(context.Background())
+		wf, err := queue.Dequeue(t.Context())
 		if err != nil {
 			t.Fatalf("failed to dequeue workflow: %v", err)
 		}
@@ -66,7 +74,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	}
 
 	// check queue is empty now
-	len, err = queue.client.LLen(context.Background(), "test-queue").Result()
+	len, err = queue.client.LLen(t.Context(), "test-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to get queue length: %v", err)
 	}
@@ -85,7 +93,11 @@ func TestClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	queue := NewRedisQueue(
 		"test-queue",
@@ -97,12 +109,12 @@ func TestClose(t *testing.T) {
 		nil,
 		1*time.Second,
 	)
-	err = queue.Close(context.Background())
+	err = queue.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	exists, err := queue.client.Exists(context.Background(), "test-queue").Result()
+	exists, err := queue.client.Exists(t.Context(), "test-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue existence: %v", err)
 	}
@@ -113,7 +125,7 @@ func TestClose(t *testing.T) {
 	}
 
 	// try to dequeue from closed queue
-	_, err = queue.Dequeue(context.Background())
+	_, err = queue.Dequeue(t.Context())
 	if err == nil {
 		t.Errorf("expected error when dequeuing from closed queue, got nil")
 	}

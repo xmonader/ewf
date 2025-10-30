@@ -35,13 +35,21 @@ func registerWf(wfengine *Engine, t *testing.T, wfName string) {
 // TestCreateAndGetQueue creates a queue engine, creates a queue, gets the created queue, and tries to get a non existing queue
 func TestCreateAndGetQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
+	defer func() {
+		if err := engine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	wfengine, err := NewEngine(store)
 	if err != nil {
@@ -84,13 +92,21 @@ func TestCreateAndGetQueue(t *testing.T) {
 // TestCloseQueue tests closing a queue and trying to get a closed queue, and closing a non existing queue
 func TestCloseQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
+	defer func() {
+		if err := engine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	wfengine, err := NewEngine(store)
 	if err != nil {
@@ -131,15 +147,17 @@ func TestCloseQueue(t *testing.T) {
 // TestCloseEngine tests closing the engine with multiple queues and ensures all queues are closed, and tries to get a queue after engine is closed
 func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
 
 	for i := 0; i < 3; i++ {
 		store, err := NewSQLiteStore("test.db")
 		if err != nil {
 			t.Fatalf("store error: %v", err)
 		}
-		defer store.Close()
-
+		defer func() {
+			if err := store.Close(); err != nil {
+				t.Errorf("failed to close store: %v", err)
+			}
+		}()
 		wfengine, err := NewEngine(store)
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
@@ -157,6 +175,7 @@ func TestCloseEngine(t *testing.T) {
 			t.Fatalf("failed to create queue: %v", err)
 		}
 	}
+
 	err := engine.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close engine: %v", err)
@@ -176,13 +195,21 @@ func TestCloseEngine(t *testing.T) {
 // TestAutoDelete tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map
 func TestAutoDelete(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
+	defer func() {
+		if err := engine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	wfengine, err := NewEngine(store)
 	if err != nil {
@@ -222,13 +249,21 @@ func TestAutoDelete(t *testing.T) {
 // TestWorkerLoop tests that one worker can dequeue and process workflows correctly
 func TestWorkerLoop(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
+	defer func() {
+		if err := engine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	wfengine, err := NewEngine(store)
 	if err != nil {
@@ -304,13 +339,21 @@ func TestWorkerLoop(t *testing.T) {
 // TestWorkerLoopMultiWorkers tests that multiple workers can dequeue and process workflows concurrently
 func TestWorkerLoopMultiWorkers(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(t.Context())
+	defer func() {
+		if err := engine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
 		t.Fatalf("store error: %v", err)
 	}
-	defer store.Close()
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
 
 	wfengine, err := NewEngine(store)
 	if err != nil {

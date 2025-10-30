@@ -115,7 +115,10 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 	defer e.mu.Unlock()
 
 	for _, q := range e.queues {
-		q.Close(ctx)
+		err := q.Close(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	e.queues = make(map[string]*RedisQueue)
