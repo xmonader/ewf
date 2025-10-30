@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	// "sync"
+	"sync"
+
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -44,7 +45,7 @@ type RedisQueue struct {
 	wfEngine     *Engine
 	onDelete     func(string)
 	popTimeout   time.Duration
-	// closeOnce    sync.Once // ensure queue closes only once
+	closeOnce    sync.Once // ensure queue closes only once
 }
 
 func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine, onDelete func(string), popTimeout time.Duration) *RedisQueue {
@@ -127,19 +128,6 @@ func (q *RedisQueue) Close(ctx context.Context) error {
 		}
 	}
 	return q.deleteQueue(ctx)
-
-	// var closeErr error
-	// q.closeOnce.Do(func() {
-	// 	if err := q.deleteQueue(ctx); err != nil {
-	// 		closeErr = fmt.Errorf("deleteQueue error:%w", err)
-	// 	}
-	// 	close(q.closeCh)
-	// 	if q.onDelete != nil {
-	// 		q.onDelete(q.name)
-	// 	}
-	// })
-	// return closeErr
-
 }
 
 func (q *RedisQueue) workerLoop(ctx context.Context) {
@@ -180,15 +168,15 @@ func (q *RedisQueue) workerLoop(ctx context.Context) {
 
 									fmt.Printf("auto-deleting empty queue: %s\n", q.name)
 
-									// q.Close(ctx)
-
-									if err := q.deleteQueue(ctx); err != nil {
-										fmt.Println("deleteQueue error:", err)
-									}
-									close(q.closeCh)
-									if q.onDelete != nil {
-										q.onDelete(q.name)
-									}
+									q.closeOnce.Do(func() {
+										if err := q.deleteQueue(ctx); err != nil {
+											fmt.Println("deleteQueue error:", err)
+										}
+										close(q.closeCh)
+										if q.onDelete != nil {
+											q.onDelete(q.name)
+										}
+									})
 									return
 								}
 							}
