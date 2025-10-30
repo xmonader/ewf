@@ -13,8 +13,9 @@ Welcome to the **EWF (Embeddedable Workflow Framework)** user guide! This docume
 6. [Step Timeouts](#step-timeouts)
 7. [Idempotency: Safe & Repeatable Steps](#idempotency-safe--repeatable-steps)
 8. [Persistence & Recovery](#persistence--recovery)
-9. [Testing Workflows](#testing-workflows)
-10. [Best Practices & Patterns](#best-practices--patterns)
+9. [Queue & Queue Engine](#queue--queue-engine)
+10. [Testing Workflows](#testing-workflows)
+11. [Best Practices & Patterns](#best-practices--patterns)
 
 ---
 
@@ -175,8 +176,53 @@ func MyStep(ctx context.Context, state ewf.State) error {
 - State is saved after each step
 
 ---
+## 9. Queue & Queue Engine
 
-## 9. Testing Workflows
+EWF includes a lightweight, embeddable **queue system** designed for asynchronous, concurrent task execution.
+
+### Queue
+
+The **Queue** is a concurrent-safe structure that allows you to enqueue and process jobs (like workflow runs or background tasks).  
+Each queue automatically starts its worker loop upon creation.
+
+Key features:
+- Thread-safe implementation  
+- Automatic worker pool management  
+- Configurable number of workers  
+- Graceful shutdown via context cancellation  
+
+Example:
+```go
+    client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
+	queue := NewRedisQueue(
+		"queue",
+		"workflow",
+		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
+		QueueOptions{AutoDelete: false},
+		client,
+		nil,
+		nil,
+		1*time.Second,
+	)
+	defer queue.Close(context)
+
+	workflow := NewWorkflow("workflow", nil)
+	err = queue.Enqueue(context, workflow)
+	if err != nil {
+		return fmt.Errorf("failed to enqueue workflow: %v", err)
+	}
+	
+	wf, err := queue.Dequeue(context)
+	if err != nil {
+		return fmt.Errorf("failed to dequeue workflow: %v", err)
+	}
+
+```
+
+## 10. Testing Workflows
 
 - Use Go's `testing` package for unit, integration, and end-to-end tests
 - Use the in-memory or SQLite store for fast, realistic tests
@@ -194,7 +240,7 @@ if err != nil {
 
 ---
 
-## 10. Best Practices & Patterns
+## 11. Best Practices & Patterns
 
 - **Always use context-aware APIs in steps** (e.g., HTTP, DB)
 - **Check for ctx.Done()** in long-running steps

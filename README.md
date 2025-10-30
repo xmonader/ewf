@@ -5,6 +5,7 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 ## Core Features
 
 *   **Centralized Engine**: A powerful `Engine` manages workflow definitions, activities, and execution.
+*	**Queue-Based Execution** *(New)*: Integrates a lightweight in-memory queue for simultaneour and concurrent workflow processing.
 *   **Stateful & Resilient Workflows**: Each workflow maintains its own state, which is persisted after each step to a `Store`.
 *   **Automatic Resumption**: The engine automatically finds and resumes interrupted workflows on startup, ensuring no work is lost.
 *   **Asynchronous Execution**: Run workflows in the background with a simple `RunAsync` method, perfect for use in HTTP servers and other concurrent applications.
@@ -26,6 +27,8 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 | Asynchronous Execution        |    ✅     | Run workflows in background |
 | Synchronous Execution         |    ✅     | For tests and CLI |
 | Pluggable Storage             |    ✅     | Implement your own Store |
+| Queue Engine                  | 	 ✅ 	   | Provides concurrent background processing for queued tasks and workflows |
+| Queue		                    |    ✅     | Built-in; supports enqueue, dequeue, and worker pool management |
 | CLI/HTTP Example Workflows    |    ✅     | See `examples/` directory |
 | Context Propagation           |    ✅     | Step context carries deadlines, values |
 | Step Metadata in Context      |    ✅     | Step name injected for idempotency |
@@ -45,6 +48,11 @@ go get github.com/xmonader/ewf
 *   **WorkflowTemplate**: A blueprint for a workflow, defining the sequence of activities (steps) to be executed.
 *   **Workflow**: A running instance of a `WorkflowTemplate`. Each workflow has a unique ID, its own state, and tracks its progress through the steps.
 *   **Store**: A persistence layer (e.g., `SQLiteStore`) that saves and loads workflow state, enabling resilience.
+*	**Queue**: A concurrent-safe in-memory structure that holds pending tasks or workflow jobs. 
+*	**QueueEngine**: It acts as a scheduler and execution manager for queued jobs, ensuring:
+	- Automatic worker startup when a queue is created.
+	- Graceful shutdowns respecting context cancellation.
+	- Optional persistence layer integration for durable queues.
 
 ## Basic Usage
 
@@ -123,6 +131,48 @@ func main() {
 
 	log.Println("Workflow completed successfully!")
 }
+```
+This example shows the usage of the `Queue Engine`:
+
+```go
+	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(context)
+
+	store, err := NewSQLiteStore("store.db")
+	if err != nil {
+		return fmt.Errorf("error creating store: %w\n", err)
+	}
+	defer store.Close()
+
+	wfengine, err := NewEngine(store)
+	if err != nil {
+		return fmt.Errorf("error creating wf engine: %w\n", err)
+	}
+
+	q, err := engine.CreateQueue(
+		context,
+		"queue",
+		"workflow",
+		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
+		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
+		wfengine,
+	)
+
+	gotQueue, err := engine.GetQueue(context, "queue")
+	if err != nil {
+		return fmt.Errorf("failed to get queue: %w\n", err)
+	}
+
+	err = engine.CloseQueue(context, "queue")
+	if err != nil {
+		return fmt.Errorf("failed to close queue: %w\n", err)
+	}
+
+	err := engine.Close(context)
+	if err != nil {
+		return fmt.Errorf("failed to close engine: %w\n", err)
+	}
+```
 
 ## Retry Policy & Backoff Examples
 

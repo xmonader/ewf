@@ -22,8 +22,8 @@ type Queue interface {
 
 // WorkersDefinition defines the worker pool for processing workflows in the queue
 type WorkersDefinition struct {
-	Count        int
-	PollInterval time.Duration
+	Count        int           // number of workers
+	PollInterval time.Duration // interval between polling the queue for new workflows
 }
 
 // QueueOptions defines options for the queue
@@ -36,16 +36,16 @@ var _ Queue = (*RedisQueue)(nil)
 
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
-	name         string
-	workflowName string
-	workersDef   WorkersDefinition
-	queueOptions QueueOptions
-	client       *redis.Client
-	closeCh      chan struct{}
-	wfEngine     *Engine
-	onDelete     func(string)
-	popTimeout   time.Duration
-	closeOnce    sync.Once // ensure queue closes only once
+	name         string            // name of the queue
+	workflowName string            // associated workflow name
+	workersDef   WorkersDefinition // definition of the worker pool
+	queueOptions QueueOptions      // options for the queue
+	client       *redis.Client     // Redis client
+	closeCh      chan struct{}     // channel to signal closure
+	wfEngine     *Engine           // workflow engine to run and process workflows
+	onDelete     func(string)      // callback to inform engine on queue deletion
+	popTimeout   time.Duration     // timeout for dequeue operations
+	closeOnce    sync.Once         // ensure queue closes only once
 }
 
 func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, wfEngine *Engine, onDelete func(string), popTimeout time.Duration) *RedisQueue {
