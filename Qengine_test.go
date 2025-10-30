@@ -7,10 +7,35 @@ import (
 	"time"
 )
 
-// TestCreateAndGetQueue creates a queue engine, creates a queue, gets the created queue, and tries to get a non existing queue 
+func waitStep(duration time.Duration) StepFn {
+	return func(ctx context.Context, state State) error {
+		time.Sleep(duration)
+		return nil
+	}
+}
+
+func registerWf(wfengine *Engine, t *testing.T, wfName string) {
+
+	t.Helper()
+
+	wfengine.Register("wait_5", waitStep(5*time.Millisecond))
+	wfengine.Register("wait_10", waitStep(10*time.Millisecond))
+	wfengine.Register("wait_15", waitStep(15*time.Millisecond))
+
+	def := &WorkflowTemplate{
+		Steps: []Step{
+			{Name: "wait_5"},
+			{Name: "wait_10"},
+			{Name: "wait_15"},
+		},
+	}
+	wfengine.RegisterTemplate(wfName, def)
+}
+
+// TestCreateAndGetQueue creates a queue engine, creates a queue, gets the created queue, and tries to get a non existing queue
 func TestCreateAndGetQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(context.Background())
+	defer engine.Close(t.Context())
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
@@ -24,7 +49,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 	}
 
 	q, err := engine.CreateQueue(
-		context.Background(),
+		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
@@ -40,7 +65,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 	}
 
 	// get the created queue
-	gotQueue, err := engine.GetQueue(context.Background(), "test-queue")
+	gotQueue, err := engine.GetQueue(t.Context(), "test-queue")
 	if err != nil {
 		t.Fatalf("failed to get queue: %v", err)
 	}
@@ -49,7 +74,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 	}
 
 	// get a non existing queue
-	_, err = engine.GetQueue(context.Background(), "test")
+	_, err = engine.GetQueue(t.Context(), "test")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -59,7 +84,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 // TestCloseQueue tests closing a queue and trying to get a closed queue, and closing a non existing queue
 func TestCloseQueue(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(context.Background())
+	defer engine.Close(t.Context())
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
@@ -73,7 +98,7 @@ func TestCloseQueue(t *testing.T) {
 	}
 
 	_, err = engine.CreateQueue(
-		context.Background(),
+		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
@@ -85,19 +110,19 @@ func TestCloseQueue(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	err = engine.CloseQueue(context.Background(), "test-queue")
+	err = engine.CloseQueue(t.Context(), "test-queue")
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
 	// try to get the closed queue
-	_, err = engine.GetQueue(context.Background(), "test-queue")
+	_, err = engine.GetQueue(t.Context(), "test-queue")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
 
 	// close a non existing queue
-	err = engine.CloseQueue(context.Background(), "test")
+	err = engine.CloseQueue(t.Context(), "test")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -106,7 +131,7 @@ func TestCloseQueue(t *testing.T) {
 // TestCloseEngine tests closing the engine with multiple queues and ensures all queues are closed, and tries to get a queue after engine is closed
 func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(context.Background())
+	defer engine.Close(t.Context())
 
 	for i := 0; i < 3; i++ {
 		store, err := NewSQLiteStore("test.db")
@@ -121,7 +146,7 @@ func TestCloseEngine(t *testing.T) {
 		}
 
 		_, err = engine.CreateQueue(
-			context.Background(),
+			t.Context(),
 			fmt.Sprintf("test-queue-%d", i),
 			"test-workflow",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
@@ -132,7 +157,7 @@ func TestCloseEngine(t *testing.T) {
 			t.Fatalf("failed to create queue: %v", err)
 		}
 	}
-	err := engine.Close(context.Background())
+	err := engine.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close engine: %v", err)
 	}
@@ -142,7 +167,7 @@ func TestCloseEngine(t *testing.T) {
 	}
 
 	// try to get a queue after engine is closed
-	_, err = engine.GetQueue(context.Background(), "test-queue-0")
+	_, err = engine.GetQueue(t.Context(), "test-queue-0")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -151,7 +176,7 @@ func TestCloseEngine(t *testing.T) {
 // TestAutoDelete tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map
 func TestAutoDelete(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(context.Background())
+	defer engine.Close(t.Context())
 
 	store, err := NewSQLiteStore("test.db")
 	if err != nil {
@@ -165,7 +190,7 @@ func TestAutoDelete(t *testing.T) {
 	}
 
 	q, err := engine.CreateQueue(
-		context.Background(),
+		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
@@ -179,7 +204,7 @@ func TestAutoDelete(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// check if the queue itself is removed from redis
-	exists, err := q.(*RedisQueue).client.Exists(context.Background(), "test-queue").Result()
+	exists, err := q.(*RedisQueue).client.Exists(t.Context(), "test-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue existence: %v", err)
 	}
@@ -188,9 +213,173 @@ func TestAutoDelete(t *testing.T) {
 	}
 
 	// check if the queue is removed from engine's map
-	_, err = engine.GetQueue(context.Background(), "test-queue")
+	_, err = engine.GetQueue(t.Context(), "test-queue")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
 }
 
+func TestWorkerLoop(t *testing.T) {
+	engine := NewRedisQueueEngine("localhost:6379")
+	defer engine.Close(t.Context())
+
+	store, err := NewSQLiteStore("test.db")
+	if err != nil {
+		t.Fatalf("store error: %v", err)
+	}
+	defer store.Close()
+
+	wfengine, err := NewEngine(store)
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
+
+	queue, err := engine.CreateQueue(
+		t.Context(),
+		"test-worker-queue",
+		"test-workflow",
+		WorkersDefinition{
+			Count:        1,
+			PollInterval: 300 * time.Millisecond,
+		},
+		QueueOptions{
+			AutoDelete:  true,
+			DeleteAfter: 2 * time.Second,
+		},
+		wfengine,
+	)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+
+	// enqueue some workflows
+	for i := 0; i < 3; i++ {
+		wfName := fmt.Sprintf("test-wf-%d", i)
+
+		registerWf(wfengine, t, wfName)
+		workflow, err := wfengine.NewWorkflow(wfName)
+		if err != nil {
+			t.Fatalf("failed to create workflow: %v", err)
+		}
+
+		err = queue.Enqueue(t.Context(), workflow)
+		if err != nil {
+			t.Fatalf("failed to enqueue workflow: %v", err)
+		}
+	}
+
+	// wait for processing
+	time.Sleep(5 * time.Second)
+
+	// the queue should be empty after workers dequeue everything
+	length, err := engine.client.LLen(t.Context(), "test-worker-queue").Result()
+	if err != nil {
+		t.Fatalf("failed to check queue length: %v", err)
+	}
+	if length != 0 {
+		t.Errorf("expected queue to be empty after processing, got %d items", length)
+	}
+
+	// wait for autodelete to trigger after idle time
+	time.Sleep(3 * time.Second)
+
+	// queue should now be deleted from redis
+	exists, err := engine.client.Exists(t.Context(), "test-worker-queue").Result()
+	if err != nil {
+		t.Fatalf("failed to check Redis key: %v", err)
+	}
+	if exists != 0 {
+		t.Errorf("expected queue to be deleted from Redis, but it still exists")
+	}
+
+	// check that closeCh was closed after auto-deletion
+	select {
+	case <-queue.(*RedisQueue).closeCh:
+		// success
+	default:
+		t.Errorf("expected closeCh to be closed after auto-delete")
+	}
+}
+
+
+
+// func TestWorkerLoopMultiWorkers(t *testing.T) {
+// 	engine := NewRedisQueueEngine("localhost:6379")
+// 	defer engine.Close(t.Context())
+
+// 	store, err := NewSQLiteStore("test.db")
+// 	if err != nil {
+// 		t.Fatalf("store error: %v", err)
+// 	}
+// 	defer store.Close()
+
+// 	wfengine, err := NewEngine(store)
+// 	if err != nil {
+// 		t.Fatalf("wf engine error: %v", err)
+// 	}
+
+// 	queue, err := engine.CreateQueue(
+// 		t.Context(),
+// 		"test-worker-queue",
+// 		"test-workflow",
+// 		WorkersDefinition{
+// 			Count:        3,
+// 			PollInterval: 300 * time.Millisecond,
+// 		},
+// 		QueueOptions{
+// 			AutoDelete:  true,
+// 			DeleteAfter: 2 * time.Second,
+// 		},
+// 		wfengine,
+// 	)
+// 	if err != nil {
+// 		t.Fatalf("failed to create queue: %v", err)
+// 	}
+
+// 	// enqueue some workflows
+// 	for i := 0; i < 3; i++ {
+// 		wfName := fmt.Sprintf("test-wf-%d", i)
+
+// 		registerWf(wfengine, t, wfName)
+// 		workflow, err := wfengine.NewWorkflow(wfName)
+// 		if err != nil {
+// 			t.Fatalf("failed to create workflow: %v", err)
+// 		}
+
+// 		err = queue.Enqueue(t.Context(), workflow)
+// 		if err != nil {
+// 			t.Fatalf("failed to enqueue workflow: %v", err)
+// 		}
+// 	}
+
+// 	// wait for processing
+// 	time.Sleep(5 * time.Second)
+
+// 	// the queue should be empty after workers dequeue everything
+// 	length, err := engine.client.LLen(t.Context(), "test-worker-queue").Result()
+// 	if err != nil {
+// 		t.Fatalf("failed to check queue length: %v", err)
+// 	}
+// 	if length != 0 {
+// 		t.Errorf("expected queue to be empty after processing")
+// 	}
+
+// 	time.Sleep(3 * time.Second)
+
+// 	// queue should now be deleted from redis
+// 	exists, err := engine.client.Exists(t.Context(), "test-worker-queue").Result()
+// 	if err != nil {
+// 		t.Fatalf("failed to check Redis key: %v", err)
+// 	}
+// 	if exists != 0 {
+// 		t.Errorf("expected queue to be deleted from Redis, but it still exists")
+// 	}
+
+// 	// check that closeCh was closed after auto-deletion
+// 	select {
+// 	case <-queue.(*RedisQueue).closeCh:
+// 		// success
+// 	default:
+// 		t.Errorf("expected closeCh to be closed after auto-delete")
+// 	}
+// }
