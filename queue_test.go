@@ -106,7 +106,7 @@ func TestClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to check queue existence: %v", err)
 	}
-	
+
 	// check that the queue is deleted from redis
 	if exists != 0 {
 		t.Errorf("expected queue to be deleted, but it still exists")
@@ -118,4 +118,3 @@ func TestClose(t *testing.T) {
 		t.Errorf("expected error when dequeuing from closed queue, got nil")
 	}
 }
-

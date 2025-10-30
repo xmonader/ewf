@@ -160,7 +160,7 @@ func TestSerialization(t *testing.T) {
 	}
 
 	if constDeserialized.Interval != constBackoff.Interval {
-		t.Errorf("Deserialized interval doesn't match: expected %v, got %v", 
+		t.Errorf("Deserialized interval doesn't match: expected %v, got %v",
 			constBackoff.Interval, constDeserialized.Interval)
 	}
 
@@ -185,29 +185,29 @@ func TestSerialization(t *testing.T) {
 
 	// Check all serialized fields
 	if expDeserialized.InitialInterval != expBackoff.InitialInterval {
-		t.Errorf("InitialInterval doesn't match: expected %v, got %v", 
+		t.Errorf("InitialInterval doesn't match: expected %v, got %v",
 			expBackoff.InitialInterval, expDeserialized.InitialInterval)
 	}
 	if expDeserialized.MaxInterval != expBackoff.MaxInterval {
-		t.Errorf("MaxInterval doesn't match: expected %v, got %v", 
+		t.Errorf("MaxInterval doesn't match: expected %v, got %v",
 			expBackoff.MaxInterval, expDeserialized.MaxInterval)
 	}
 	if expDeserialized.Multiplier != expBackoff.Multiplier {
-		t.Errorf("Multiplier doesn't match: expected %v, got %v", 
+		t.Errorf("Multiplier doesn't match: expected %v, got %v",
 			expBackoff.Multiplier, expDeserialized.Multiplier)
 	}
 	if expDeserialized.RandomizationFactor != expBackoff.RandomizationFactor {
-		t.Errorf("RandomizationFactor doesn't match: expected %v, got %v", 
+		t.Errorf("RandomizationFactor doesn't match: expected %v, got %v",
 			expBackoff.RandomizationFactor, expDeserialized.RandomizationFactor)
 	}
 	if expDeserialized.MaxElapsedTime != expBackoff.MaxElapsedTime {
-		t.Errorf("MaxElapsedTime doesn't match: expected %v, got %v", 
+		t.Errorf("MaxElapsedTime doesn't match: expected %v, got %v",
 			expBackoff.MaxElapsedTime, expDeserialized.MaxElapsedTime)
 	}
 
 	// Check that non-serialized fields were correctly initialized to zero values
 	if expDeserialized.CurrentInterval != 0 {
-		t.Errorf("CurrentInterval should be zero after deserialization, got %v", 
+		t.Errorf("CurrentInterval should be zero after deserialization, got %v",
 			expDeserialized.CurrentInterval)
 	}
 	if expDeserialized.Clock != nil {
@@ -218,7 +218,7 @@ func TestSerialization(t *testing.T) {
 func TestWorkflowSerialization(t *testing.T) {
 	// Create a workflow with retry policies
 	workflow := NewWorkflow("test-workflow")
-	
+
 	// Add steps with different backoff strategies
 	workflow.Steps = []Step{
 		{

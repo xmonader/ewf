@@ -203,14 +203,14 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 		return nil // Already completed
 	}
 	w.Status = StatusRunning
-	
+
 	// Save workflow immediately when it starts running so it's visible in status checks
 	if w.store != nil {
 		if err := w.store.SaveWorkflow(ctx, w); err != nil {
 			return fmt.Errorf("failed to save workflow state when starting: %w", err)
 		}
 	}
-	
+
 	// move to the current step
 	for i := w.CurrentStep; i < len(w.Steps); i++ {
 		step := w.Steps[i]
