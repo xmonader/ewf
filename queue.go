@@ -114,7 +114,7 @@ func (q *RedisQueue) deleteQueue(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the queue and deletes it after DeleteAfter duration if AutoDelete is set
+// Close closes the queue and deletes it from Redis
 func (q *RedisQueue) Close(ctx context.Context) error {
 
 	if q.closeCh != nil {
