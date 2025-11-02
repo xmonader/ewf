@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 
 	"time"
 
@@ -33,12 +32,10 @@ type RedisQueue struct {
 	queueOptions QueueOptions      // options for the queue
 	client       *redis.Client     // Redis client
 	closeCh      chan struct{}     // channel to signal closure
-	onDelete     func(string)      // callback to inform engine on queue deletion
 	popTimeout   time.Duration     // timeout for dequeue operations
-	closeOnce    sync.Once         // ensure queue closes only once
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, onDelete func(string), popTimeout time.Duration) *RedisQueue {
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, popTimeout time.Duration) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		workflowName: workflowName,
@@ -46,7 +43,6 @@ func NewRedisQueue(queueName string, workflowName string, workersDefinition Work
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
-		onDelete:     onDelete,
 		popTimeout:   popTimeout,
 	}
 }

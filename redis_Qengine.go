@@ -52,11 +52,6 @@ func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName
 		workersDefinition,
 		queueOptions,
 		e.client,
-		func(name string) {
-			e.mu.Lock()
-			defer e.mu.Unlock()
-			delete(e.queues, name)
-		},
 		popTimeout,
 	)
 
@@ -112,4 +107,28 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 
 	e.queues = make(map[string]*RedisQueue)
 	return e.client.Close()
+}
+
+func (e *RedisQueueEngine) checkAutoDelete(ctx context.Context, q *RedisQueue, idleSince *time.Time) (bool, error) {
+
+	if !q.queueOptions.AutoDelete {
+		return false, nil
+	}
+
+	if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
+		length, err := q.client.LLen(ctx, q.name).Result()
+		if err != nil {
+			return false, fmt.Errorf("failed to check queue length: %w", err)
+		}
+
+		if length == 0 {
+
+			fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+
+			if err := e.CloseQueue(ctx, q.name); err != nil {
+				return false, fmt.Errorf("deleteQueue error: %w", err)
+			}
+		}
+	}
+	return false,nil
 }

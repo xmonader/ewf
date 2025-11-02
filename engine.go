@@ -243,36 +243,25 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
 					}
 
 					if wf == nil { // empty queue
-						if q.queueOptions.AutoDelete {
-							now := time.Now()
 
-							if idleSince == nil {
-								idleSince = &now
+						now := time.Now()
+						if idleSince == nil {
+							idleSince = &now
+						}
+
+						if redisQueueEngine, ok := e.queueEngine.(*RedisQueueEngine); ok {
+
+							deleted, err := redisQueueEngine.checkAutoDelete(ctx, q, idleSince)
+							if err != nil {
+								fmt.Printf("Worker %d: error checking auto-deletion: %v\n", workerID, err)
 							}
-
-							if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
-								length, err := q.client.LLen(ctx, q.name).Result()
-
-								if err == nil && length == 0 {
-
-									fmt.Printf("auto-deleting empty queue: %s\n", q.name)
-
-									q.closeOnce.Do(func() {
-										if err := q.deleteQueue(ctx); err != nil {
-											fmt.Println("deleteQueue error:", err)
-										}
-										close(q.closeCh)
-										if q.onDelete != nil {
-											q.onDelete(q.name)
-										}
-									})
-									return
-								}
+							if deleted {
+								return // queue deleted, exit worker
 							}
 						}
 						continue
 					}
-					idleSince = nil // reset idle timer
+					idleSince = nil //reset idle timer
 
 					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
 
