@@ -33,12 +33,12 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 }
 
 // CreateQueue creates a new queue and uses 0 timeout by default for dequeue operations
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine) (Queue, error) {
-	return e.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, wfEngine, 0)
+func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+	return e.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, 0)
 }
 
 // CreateQueue creates a new queue and uses the passes timeout for dequeue operations
-func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, wfEngine *Engine, popTimeout time.Duration) (Queue, error) {
+func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, popTimeout time.Duration) (Queue, error) {
 	e.mu.Lock()
 
 	if _, ok := e.queues[queueName]; ok {
@@ -52,7 +52,6 @@ func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName
 		workersDefinition,
 		queueOptions,
 		e.client,
-		wfEngine,
 		func(name string) {
 			e.mu.Lock()
 			defer e.mu.Unlock()
@@ -63,8 +62,6 @@ func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName
 
 	e.queues[queueName] = q
 	e.mu.Unlock()
-
-	e.startQueueWorkers(ctx, q)
 
 	return q, nil
 }
@@ -115,72 +112,4 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 
 	e.queues = make(map[string]*RedisQueue)
 	return e.client.Close()
-}
-
-func (e *RedisQueueEngine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
-	for i := 0; i < q.workersDef.Count; i++ {
-
-		go func(workerID int) {
-			ticker := time.NewTicker(q.workersDef.PollInterval)
-			defer ticker.Stop()
-
-			var idleSince *time.Time
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-q.closeCh:
-					return
-				case <-ticker.C:
-					wf, err := q.Dequeue(ctx)
-
-					if err != nil && err != redis.Nil {
-						fmt.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
-						continue
-					}
-
-					if wf == nil { // empty queue
-						if q.queueOptions.AutoDelete {
-							now := time.Now()
-
-							if idleSince == nil {
-								idleSince = &now
-							}
-
-							if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
-								length, err := q.client.LLen(ctx, q.name).Result()
-
-								if err == nil && length == 0 {
-
-									fmt.Printf("auto-deleting empty queue: %s\n", q.name)
-
-									q.closeOnce.Do(func() {
-										if err := q.deleteQueue(ctx); err != nil {
-											fmt.Println("deleteQueue error:", err)
-										}
-										close(q.closeCh)
-										if q.onDelete != nil {
-											q.onDelete(q.name)
-										}
-									})
-									return
-								}
-							}
-						}
-						continue
-					}
-					idleSince = nil // reset idle timer
-
-					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
-
-					if err := q.wfEngine.RunSync(ctx, wf); err != nil {
-						fmt.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
-					} else {
-						fmt.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
-					}
-				}
-			}
-		}(i)
-	}
 }

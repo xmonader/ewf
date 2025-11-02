@@ -5,6 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Engine is the central component for managing and executing workflows.
@@ -173,4 +176,113 @@ func (e *Engine) ResumeRunningWorkflows() {
 			e.RunAsync(ctx, wf)
 		}
 	}()
+}
+
+// CreateQueue creates a new queue and starts workers for it
+func (e *Engine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+	if e.queueEngine == nil {
+		return nil, fmt.Errorf("no queue engine configured")
+	}
+
+	queue, err := e.queueEngine.CreateQueue(ctx, queueName, workflowName, workersDefinition, queueOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	if redisQueue, ok := queue.(*RedisQueue); ok {
+		e.startQueueWorkers(ctx, redisQueue)
+	}
+
+	return queue, nil
+}
+
+// CreateQueueWithTimeout creates a new queue with specific pop timeout and starts workers for it
+func (e *Engine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, popTimeout time.Duration) (Queue, error) {
+	if e.queueEngine == nil {
+		return nil, fmt.Errorf("no queue engine configured")
+	}
+
+	redisQueueEngine, ok := e.queueEngine.(*RedisQueueEngine)
+	if !ok {
+		return nil, fmt.Errorf("queue engine does not support timeout configuration")
+	}
+
+	queue, err := redisQueueEngine.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, popTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	if redisQueue, ok := queue.(*RedisQueue); ok {
+		e.startQueueWorkers(ctx, redisQueue)
+	}
+
+	return queue, nil
+}
+
+func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
+	for i := 0; i < q.workersDef.Count; i++ {
+
+		go func(workerID int) {
+			ticker := time.NewTicker(q.workersDef.PollInterval)
+			defer ticker.Stop()
+
+			var idleSince *time.Time
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-q.closeCh:
+					return
+				case <-ticker.C:
+					wf, err := q.Dequeue(ctx)
+
+					if err != nil && err != redis.Nil {
+						fmt.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
+						continue
+					}
+
+					if wf == nil { // empty queue
+						if q.queueOptions.AutoDelete {
+							now := time.Now()
+
+							if idleSince == nil {
+								idleSince = &now
+							}
+
+							if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
+								length, err := q.client.LLen(ctx, q.name).Result()
+
+								if err == nil && length == 0 {
+
+									fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+
+									q.closeOnce.Do(func() {
+										if err := q.deleteQueue(ctx); err != nil {
+											fmt.Println("deleteQueue error:", err)
+										}
+										close(q.closeCh)
+										if q.onDelete != nil {
+											q.onDelete(q.name)
+										}
+									})
+									return
+								}
+							}
+						}
+						continue
+					}
+					idleSince = nil // reset idle timer
+
+					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
+
+					if err := e.RunSync(ctx, wf); err != nil {
+						fmt.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+					} else {
+						fmt.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
+					}
+				}
+			}
+		}(i)
+	}
 }
