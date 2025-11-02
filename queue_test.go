@@ -32,7 +32,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		QueueOptions{AutoDelete: false},
 		client,
 		nil,
-		nil,
 		1*time.Second,
 	)
 	defer func() {
@@ -105,7 +104,6 @@ func TestClose(t *testing.T) {
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
-		nil,
 		nil,
 		1*time.Second,
 	)

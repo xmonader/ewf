@@ -41,28 +41,12 @@ func TestCreateAndGetQueue(t *testing.T) {
 		}
 	}()
 
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
-
-	wfengine, err := NewEngine(store)
-	if err != nil {
-		t.Fatalf("wf engine error: %v", err)
-	}
-
 	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
-		wfengine,
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
@@ -98,28 +82,12 @@ func TestCloseQueue(t *testing.T) {
 		}
 	}()
 
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
-
-	wfengine, err := NewEngine(store)
-	if err != nil {
-		t.Fatalf("wf engine error: %v", err)
-	}
-
-	_, err = engine.CreateQueue(
+	_, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
-		wfengine,
 	)
 
 	if err != nil {
@@ -149,27 +117,12 @@ func TestCloseEngine(t *testing.T) {
 	engine := NewRedisQueueEngine("localhost:6379")
 
 	for i := 0; i < 3; i++ {
-		store, err := NewSQLiteStore("test.db")
-		if err != nil {
-			t.Fatalf("store error: %v", err)
-		}
-		defer func() {
-			if err := store.Close(); err != nil {
-				t.Errorf("failed to close store: %v", err)
-			}
-		}()
-		wfengine, err := NewEngine(store)
-		if err != nil {
-			t.Fatalf("wf engine error: %v", err)
-		}
-
-		_, err = engine.CreateQueue(
+		_, err := engine.CreateQueue(
 			t.Context(),
 			fmt.Sprintf("test-queue-%d", i),
 			"test-workflow",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
-			wfengine,
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
@@ -201,28 +154,12 @@ func TestAutoDelete(t *testing.T) {
 		}
 	}()
 
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
-
-	wfengine, err := NewEngine(store)
-	if err != nil {
-		t.Fatalf("wf engine error: %v", err)
-	}
-
 	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
 		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
-		wfengine,
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
@@ -282,7 +219,6 @@ func TestWorkerLoop(t *testing.T) {
 			AutoDelete:  true,
 			DeleteAfter: 2 * time.Second,
 		},
-		wfengine,
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
@@ -372,7 +308,6 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 			AutoDelete:  true,
 			DeleteAfter: 2 * time.Second,
 		},
-		wfengine,
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
