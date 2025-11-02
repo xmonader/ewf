@@ -147,14 +147,19 @@ func TestCloseEngine(t *testing.T) {
 
 // TestAutoDelete tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map
 func TestAutoDelete(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	qEngine := NewRedisQueueEngine("localhost:6379")
 	defer func() {
-		if err := engine.Close(t.Context()); err != nil {
+		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
 	}()
 
-	q, err := engine.CreateQueue(
+	wfengine, err := NewEngineWithQueue(nil, qEngine)
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
+
+	q, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-queue",
 		"test-workflow",
@@ -164,6 +169,7 @@ func TestAutoDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
 	}
+
 	// wait for longer than DeleteAfter duration
 	time.Sleep(5 * time.Second)
 
@@ -177,7 +183,7 @@ func TestAutoDelete(t *testing.T) {
 	}
 
 	// check if the queue is removed from engine's map
-	_, err = engine.GetQueue(t.Context(), "test-queue")
+	_, err = qEngine.GetQueue(t.Context(), "test-queue")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -185,9 +191,9 @@ func TestAutoDelete(t *testing.T) {
 
 // TestWorkerLoop tests that one worker can dequeue and process workflows correctly
 func TestWorkerLoop(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	qEngine := NewRedisQueueEngine("localhost:6379")
 	defer func() {
-		if err := engine.Close(t.Context()); err != nil {
+		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close store: %v", err)
 		}
 	}()
@@ -202,12 +208,12 @@ func TestWorkerLoop(t *testing.T) {
 		}
 	}()
 
-	wfengine, err := NewEngine(store)
+	wfengine, err := NewEngineWithQueue(store,qEngine)
 	if err != nil {
 		t.Fatalf("wf engine error: %v", err)
 	}
 
-	queue, err := engine.CreateQueue(
+	queue, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-worker-queue",
 		"test-workflow",
@@ -244,7 +250,7 @@ func TestWorkerLoop(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// the queue should be empty after workers dequeue everything
-	length, err := engine.client.LLen(t.Context(), "test-worker-queue").Result()
+	length, err := qEngine.client.LLen(t.Context(), "test-worker-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue length: %v", err)
 	}
@@ -255,7 +261,7 @@ func TestWorkerLoop(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// queue should now be deleted from redis
-	exists, err := engine.client.Exists(t.Context(), "test-worker-queue").Result()
+	exists, err := qEngine.client.Exists(t.Context(), "test-worker-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check Redis key: %v", err)
 	}
@@ -274,9 +280,9 @@ func TestWorkerLoop(t *testing.T) {
 
 // TestWorkerLoopMultiWorkers tests that multiple workers can dequeue and process workflows concurrently
 func TestWorkerLoopMultiWorkers(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	qEngine := NewRedisQueueEngine("localhost:6379")
 	defer func() {
-		if err := engine.Close(t.Context()); err != nil {
+		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
 	}()
@@ -291,12 +297,12 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 		}
 	}()
 
-	wfengine, err := NewEngine(store)
+	wfengine, err := NewEngineWithQueue(store,qEngine)
 	if err != nil {
 		t.Fatalf("wf engine error: %v", err)
 	}
 
-	queue, err := engine.CreateQueue(
+	queue, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-worker-queue",
 		"test-workflow",
@@ -333,7 +339,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	// the queue should be empty after workers dequeue everything
-	length, err := engine.client.LLen(t.Context(), "test-worker-queue").Result()
+	length, err := qEngine.client.LLen(t.Context(), "test-worker-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue length: %v", err)
 	}
@@ -344,7 +350,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// queue should now be deleted from redis
-	exists, err := engine.client.Exists(t.Context(), "test-worker-queue").Result()
+	exists, err := qEngine.client.Exists(t.Context(), "test-worker-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check Redis key: %v", err)
 	}

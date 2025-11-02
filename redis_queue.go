@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"time"
 
@@ -33,6 +34,7 @@ type RedisQueue struct {
 	client       *redis.Client     // Redis client
 	closeCh      chan struct{}     // channel to signal closure
 	popTimeout   time.Duration     // timeout for dequeue operations
+	closeOnce    sync.Once		   // ensure closing the queue by one worker only 
 }
 
 func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, popTimeout time.Duration) *RedisQueue {

@@ -122,13 +122,20 @@ func (e *RedisQueueEngine) checkAutoDelete(ctx context.Context, q *RedisQueue, i
 		}
 
 		if length == 0 {
-
 			fmt.Printf("auto-deleting empty queue: %s\n", q.name)
 
-			if err := e.CloseQueue(ctx, q.name); err != nil {
-				return false, fmt.Errorf("deleteQueue error: %w", err)
+			var deleteErr error
+			q.closeOnce.Do(func() {
+				if err := e.CloseQueue(ctx, q.name); err != nil {
+					deleteErr = fmt.Errorf("deleteQueue error: %w", err)
+					return 
+				}
+			})
+			if deleteErr != nil {
+				return false, deleteErr
 			}
+			return true, nil
 		}
 	}
-	return false,nil
+	return false, nil
 }
