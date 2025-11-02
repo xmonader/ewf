@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
+	"sync"
 )
 
 // Engine is the central component for managing and executing workflows.
@@ -14,6 +16,7 @@ type Engine struct {
 	activities map[string]StepFn
 	templates  map[string]*WorkflowTemplate
 	store      Store
+	mu         sync.RWMutex
 }
 
 // NewEngine creates a new workflow engine.
@@ -31,9 +34,7 @@ func NewEngine(store Store) (*Engine, error) {
 		}
 		templates, err := store.LoadAllWorkflowTemplates(context.Background())
 		if err == nil {
-			for name, tmpl := range templates {
-				engine.templates[name] = tmpl
-			}
+			maps.Copy(engine.templates, templates)
 		}
 	}
 
@@ -44,6 +45,8 @@ func NewEngine(store Store) (*Engine, error) {
 // This allows the activity to be used in workflow steps by its name.
 // Register registers an activity function with the engine.
 func (e *Engine) Register(name string, activity StepFn) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.activities[name] = activity
 }
 
@@ -52,6 +55,8 @@ func (e *Engine) Register(name string, activity StepFn) {
 // RegisterTemplate registers a workflow template with the engine.
 // RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.templates[name] = def
 	if e.store != nil {
 		_ = e.store.SaveWorkflowTemplate(context.Background(), name, def)
@@ -71,7 +76,9 @@ func (e *Engine) Store() Store {
 // NewWorkflow creates a new workflow instance from a registered definition.
 // NewWorkflow creates a new workflow instance from a registered definition.
 func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
+	e.mu.RLock()
 	def, ok := e.templates[name]
+	e.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("workflow template '%s' not registered", name)
 	}
@@ -91,7 +98,9 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 // rehydrate applies the non-persisted fields from a workflow's definition.
 // rehydrate applies the non-persisted fields from a workflow's definition.
 func (e *Engine) rehydrate(w *Workflow) error {
+	e.mu.RLock()
 	def, ok := e.templates[w.Name]
+	e.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("workflow template '%s' not registered", w.Name)
 	}
@@ -122,7 +131,18 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 		hook(ctx, w)
 	}
 
-	return w.run(ctx, e.activities)
+	stepFns := make(map[string]StepFn)
+	e.mu.RLock()
+	for _, step := range w.Steps {
+		activity, ok := e.activities[step.Name]
+		if !ok {
+			return fmt.Errorf("activity '%s' not registered", step.Name)
+		}
+		stepFns[step.Name] = activity
+	}
+	e.mu.RUnlock()
+
+	return w.run(ctx, stepFns)
 }
 
 // RunAsync runs a workflow asynchronously in a new goroutine.
