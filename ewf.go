@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ErrFailWorkflowNow is a special error that can be returned by a step to indicate that the workflow should be failed immediately.
@@ -197,20 +198,20 @@ func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 	return w
 }
 
-func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err error) {
+func (w *Workflow) run(ctx context.Context, stepFns map[string]StepFn) (err error) {
 
 	if w.Status == StatusCompleted {
 		return nil // Already completed
 	}
 	w.Status = StatusRunning
-	
+
 	// Save workflow immediately when it starts running so it's visible in status checks
 	if w.store != nil {
 		if err := w.store.SaveWorkflow(ctx, w); err != nil {
 			return fmt.Errorf("failed to save workflow state when starting: %w", err)
 		}
 	}
-	
+
 	// move to the current step
 	for i := w.CurrentStep; i < len(w.Steps); i++ {
 		step := w.Steps[i]
@@ -221,7 +222,7 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 
 		var attempts uint = 0
 		var stepErr error
-		activity, ok := activities[step.Name]
+		stepFn, ok := stepFns[step.Name]
 		if !ok {
 			return fmt.Errorf("activity '%s' not registered", step.Name)
 		}
@@ -257,7 +258,7 @@ func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err e
 						stepErr = fmt.Errorf("panic in step '%s': %v", step.Name, r)
 					}
 				}()
-				stepErr = activity(ctxWithStep, w.State)
+				stepErr = stepFn(ctxWithStep, w.State)
 			}()
 			if ctxWithStep.Err() == context.DeadlineExceeded {
 				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
