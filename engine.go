@@ -11,18 +11,24 @@ import (
 // It holds a registry of all available activities and a store for persistence.
 // Engine is the central component for managing and executing workflows.
 type Engine struct {
-	activities map[string]StepFn
-	templates  map[string]*WorkflowTemplate
-	store      Store
+	activities  map[string]StepFn
+	templates   map[string]*WorkflowTemplate
+	store       Store
+	queueEngine QueueEngine
 }
 
 // NewEngine creates a new workflow engine.
-// NewEngine creates a new workflow engine.
 func NewEngine(store Store) (*Engine, error) {
+	return NewEngineWithQueue(store, nil)
+}
+
+// NewEngine creates a new workflow engine.
+func NewEngineWithQueue(store Store, queueEngine QueueEngine) (*Engine, error) {
 	engine := &Engine{
-		activities: make(map[string]StepFn),
-		templates:  make(map[string]*WorkflowTemplate),
-		store:      store,
+		activities:  make(map[string]StepFn),
+		templates:   make(map[string]*WorkflowTemplate),
+		store:       store,
+		queueEngine: queueEngine,
 	}
 
 	if store != nil {
