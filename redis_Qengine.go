@@ -40,9 +40,9 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 // CreateQueue creates a new queue and uses the passes timeout for dequeue operations
 func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, popTimeout time.Duration) (Queue, error) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	if _, ok := e.queues[queueName]; ok {
-		e.mu.Unlock()
 		return nil, fmt.Errorf("queue %s already exists", queueName)
 	}
 
@@ -56,7 +56,10 @@ func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName
 	)
 
 	e.queues[queueName] = q
-	e.mu.Unlock()
+
+	if queueOptions.AutoDelete {
+		e.monitorAutoDelete(ctx, q)
+	}
 
 	return q, nil
 }
@@ -109,33 +112,47 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 	return e.client.Close()
 }
 
-func (e *RedisQueueEngine) checkAutoDelete(ctx context.Context, q *RedisQueue, idleSince *time.Time) (bool, error) {
+func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue) {
 
-	if !q.queueOptions.AutoDelete {
-		return false, nil
-	}
+	go func() {
+		ticker := time.NewTicker(q.workersDef.PollInterval)
+		defer ticker.Stop()
 
-	if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
-		length, err := q.client.LLen(ctx, q.name).Result()
-		if err != nil {
-			return false, fmt.Errorf("failed to check queue length: %w", err)
-		}
-
-		if length == 0 {
-			fmt.Printf("auto-deleting empty queue: %s\n", q.name)
-
-			var deleteErr error
-			q.closeOnce.Do(func() {
-				if err := e.CloseQueue(ctx, q.name); err != nil {
-					deleteErr = fmt.Errorf("deleteQueue error: %w", err)
-					return 
+		var idleSince *time.Time
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-q.closeCh:
+				return
+			case <-ticker.C:
+				length, err := q.client.LLen(ctx, q.name).Result()
+				if err != nil {
+					fmt.Printf("failed to check queue length: %v", err)
+					continue
 				}
-			})
-			if deleteErr != nil {
-				return false, deleteErr
+
+				if length == 0 {
+					now := time.Now()
+
+					if idleSince == nil {
+						idleSince = &now
+					}
+
+					if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
+
+						fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+
+						q.closeOnce.Do(func() {
+							if err := e.CloseQueue(ctx, q.name); err != nil {
+								fmt.Printf("error deleting queue: %v", err)
+								return
+							}
+							fmt.Printf("Successfully auto-deleted queue: %s\n", q.name)
+						})
+					}
+				}
 			}
-			return true, nil
 		}
-	}
-	return false, nil
+	}()
 }

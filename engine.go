@@ -226,8 +226,6 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
 			ticker := time.NewTicker(q.workersDef.PollInterval)
 			defer ticker.Stop()
 
-			var idleSince *time.Time
-
 			for {
 				select {
 				case <-ctx.Done():
@@ -242,26 +240,9 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
 						continue
 					}
 
-					if wf == nil { // empty queue
-
-						now := time.Now()
-						if idleSince == nil {
-							idleSince = &now
-						}
-
-						if redisQueueEngine, ok := e.queueEngine.(*RedisQueueEngine); ok {
-
-							deleted, err := redisQueueEngine.checkAutoDelete(ctx, q, idleSince)
-							if err != nil {
-								fmt.Printf("Worker %d: error checking auto-deletion: %v\n", workerID, err)
-							}
-							if deleted {
-								return // queue deleted, exit worker
-							}
-						}
+					if wf == nil { 
 						continue
 					}
-					idleSince = nil //reset idle timer
 
 					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
 
