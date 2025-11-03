@@ -28,17 +28,15 @@ var _ Queue = (*RedisQueue)(nil)
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
 	name         string            // name of the queue
-	workflowName string            // associated workflow name
 	workersDef   WorkersDefinition // definition of the worker pool
 	queueOptions QueueOptions      // options for the queue
 	client       *redis.Client     // Redis client
 	closeCh      chan struct{}     // channel to signal closure
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
+func NewRedisQueue(queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
-		workflowName: workflowName,
 		workersDef:   workersDefinition,
 		queueOptions: queueOptions,
 		client:       client,
@@ -59,11 +57,6 @@ func (q *RedisQueue) WorkersDefinition() WorkersDefinition {
 // CloseCh returns the channel to signal queue closure
 func (q *RedisQueue) CloseCh() <-chan struct{} {
 	return q.closeCh
-}
-
-// WorkflowName returns the associated workflow name of the queue
-func (q *RedisQueue) WorkflowName() string {
-	return q.workflowName
 }
 
 // Enqueue adds a workflow to the queue

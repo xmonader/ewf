@@ -31,7 +31,7 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 }
 
 // CreateQueue creates a new queue
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -41,7 +41,6 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 
 	q := NewRedisQueue(
 		queueName,
-		workflowName,
 		workersDefinition,
 		queueOptions,
 		e.client,

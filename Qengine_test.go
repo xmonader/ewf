@@ -44,7 +44,6 @@ func TestCreateAndGetQueue(t *testing.T) {
 	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
-		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
@@ -85,7 +84,6 @@ func TestCloseQueue(t *testing.T) {
 	_, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
-		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
@@ -120,7 +118,6 @@ func TestCloseEngine(t *testing.T) {
 		_, err := engine.CreateQueue(
 			t.Context(),
 			fmt.Sprintf("test-queue-%d", i),
-			"test-workflow",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 		)
@@ -162,7 +159,6 @@ func TestAutoDelete(t *testing.T) {
 	q, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-queue",
-		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 	)
@@ -208,7 +204,6 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 		q, err := wfengine.CreateQueue(
 			t.Context(),
 			fmt.Sprintf("test-queue_%d", i),
-			"test-workflow",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 		)
@@ -267,7 +262,6 @@ func TestWorkerLoop(t *testing.T) {
 	queue, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-worker-queue",
-		"test-workflow",
 		WorkersDefinition{
 			Count:        1,
 			PollInterval: 300 * time.Millisecond,
@@ -356,7 +350,6 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 	queue, err := wfengine.CreateQueue(
 		t.Context(),
 		"test-worker-queue",
-		"test-workflow",
 		WorkersDefinition{
 			Count:        3,
 			PollInterval: 300 * time.Millisecond,

@@ -193,12 +193,12 @@ func (e *Engine) ResumeRunningWorkflows() {
 }
 
 // CreateQueue creates a new queue and starts workers for it
-func (e *Engine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *Engine) CreateQueue(ctx context.Context, queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
 	if e.queueEngine == nil {
 		return nil, fmt.Errorf("no queue engine configured")
 	}
 
-	queue, err := e.queueEngine.CreateQueue(ctx, queueName, workflowName, workersDefinition, queueOptions)
+	queue, err := e.queueEngine.CreateQueue(ctx, queueName, workersDefinition, queueOptions)
 	if err != nil {
 		return nil, err
 	}

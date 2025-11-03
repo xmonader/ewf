@@ -27,7 +27,6 @@ func TestEnqueueDequeue(t *testing.T) {
 
 	queue := NewRedisQueue(
 		"test-queue",
-		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
@@ -98,7 +97,6 @@ func TestClose(t *testing.T) {
 
 	queue := NewRedisQueue(
 		"test-queue",
-		"test-workflow",
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
