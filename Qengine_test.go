@@ -189,6 +189,57 @@ func TestAutoDelete(t *testing.T) {
 	}
 }
 
+// TestAutoDeleteMultipleQueues tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map for 3 queues
+func TestAutoDeleteMultipleQueues(t *testing.T) {
+	qEngine := NewRedisQueueEngine("localhost:6379")
+	defer func() {
+		if err := qEngine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+	}()
+
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
+	}
+
+	var createdQueues []Queue
+	for i := 0; i < 3; i++ {
+		q, err := wfengine.CreateQueue(
+			t.Context(),
+			fmt.Sprintf("test-queue_%d", i),
+			"test-workflow",
+			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
+			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
+		)
+		if err != nil {
+			t.Fatalf("failed to create queue: %v", err)
+		}
+		createdQueues = append(createdQueues, q)
+	}
+
+	// wait for longer than DeleteAfter duration
+	time.Sleep(5 * time.Second)
+
+	for _, q := range createdQueues {
+		// check if the queue itself is removed from redis
+		exists, err := q.(*RedisQueue).client.Exists(t.Context(), q.Name()).Result()
+		if err != nil {
+			t.Fatalf("failed to check queue existence: %v", err)
+		}
+		if exists != 0 {
+			t.Errorf("expected queue to be deleted from Redis")
+		}
+
+		// check if the queue is removed from engine's map
+		_, err = qEngine.GetQueue(t.Context(), q.Name())
+		if err != ErrQueueNotFound {
+			t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
+		}
+	}
+
+}
+
 // TestWorkerLoop tests that one worker can dequeue and process workflows correctly
 func TestWorkerLoop(t *testing.T) {
 	qEngine := NewRedisQueueEngine("localhost:6379")
