@@ -9,7 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-
 var _ QueueEngine = (*RedisQueueEngine)(nil)
 
 // RedisQueueEngine is the Redis implementation of the QueueEngine interface
@@ -30,7 +29,6 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 		queues: make(map[string]*RedisQueue),
 	}
 }
-
 
 // CreateQueue creates a new queue
 func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
@@ -137,13 +135,11 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 
 						fmt.Printf("auto-deleting empty queue: %s\n", q.name)
 
-						q.closeOnce.Do(func() {
-							if err := e.CloseQueue(ctx, q.name); err != nil {
-								fmt.Printf("error deleting queue: %v", err)
-								return
-							}
-							fmt.Printf("Successfully auto-deleted queue: %s\n", q.name)
-						})
+						if err := e.CloseQueue(ctx, q.name); err != nil {
+							fmt.Printf("error deleting queue: %v", err)
+							return
+						}
+						fmt.Printf("Successfully auto-deleted queue: %s\n", q.name)
 					}
 				}
 			}
