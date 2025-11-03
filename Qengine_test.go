@@ -154,7 +154,7 @@ func TestAutoDelete(t *testing.T) {
 		}
 	}()
 
-	wfengine, err := NewEngineWithQueue(nil, qEngine)
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
 		t.Fatalf("wf engine error: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestWorkerLoop(t *testing.T) {
 		}
 	}()
 
-	wfengine, err := NewEngineWithQueue(store,qEngine)
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
 		t.Fatalf("wf engine error: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 		}
 	}()
 
-	wfengine, err := NewEngineWithQueue(store,qEngine)
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
 		t.Fatalf("wf engine error: %v", err)
 	}

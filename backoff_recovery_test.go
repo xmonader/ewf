@@ -80,7 +80,7 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	}()
 
 	// Create an engine
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("Failed to create engine: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	recoveredWf.SetStore(store)
 
 	// Re-register the activity for the recovered workflow
-	engine2, err := NewEngine(store)
+	engine2, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("Failed to create second engine: %v", err)
 	}

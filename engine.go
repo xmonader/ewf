@@ -20,25 +20,37 @@ type Engine struct {
 	queueEngine QueueEngine
 }
 
-// NewEngine creates a new workflow engine.
-func NewEngine(store Store) (*Engine, error) {
-	return NewEngineWithQueue(store, nil)
+type EngineOption func(*Engine)
+
+func Withstore(store Store) EngineOption {
+	return func(e *Engine) {
+		e.store = store
+	}
+}
+
+func WithQueueEngine(queueEngine QueueEngine) EngineOption {
+	return func(e *Engine) {
+		e.queueEngine = queueEngine
+	}
 }
 
 // NewEngine creates a new workflow engine.
-func NewEngineWithQueue(store Store, queueEngine QueueEngine) (*Engine, error) {
+func NewEngine(opts ...EngineOption) (*Engine, error) {
 	engine := &Engine{
-		activities:  make(map[string]StepFn),
-		templates:   make(map[string]*WorkflowTemplate),
-		store:       store,
-		queueEngine: queueEngine,
+		activities: make(map[string]StepFn),
+		templates:  make(map[string]*WorkflowTemplate),
 	}
 
-	if store != nil {
-		if err := store.Setup(); err != nil {
+	for _, opt := range opts {
+		opt(engine)
+	}
+
+	if engine.store != nil {
+		if err := engine.store.Setup(); err != nil {
 			return nil, fmt.Errorf("failed to setup store: %w", err)
 		}
-		templates, err := store.LoadAllWorkflowTemplates(context.Background())
+
+		templates, err := engine.store.LoadAllWorkflowTemplates(context.Background())
 		if err == nil {
 			for name, tmpl := range templates {
 				engine.templates[name] = tmpl
@@ -240,7 +252,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
 						continue
 					}
 
-					if wf == nil { 
+					if wf == nil {
 						continue
 					}
 

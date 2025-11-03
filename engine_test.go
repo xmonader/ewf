@@ -40,7 +40,7 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 		t.Fatalf("failed to setup store: %v", err)
 	}
 
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	}
 
 	// Simulate process restart: create new engine, reload workflow from DB
-	engine2, err := NewEngine(store)
+	engine2, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine2: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEngine_DynamicTemplatePersistenceAndRecovery(t *testing.T) {
 		}
 	}()
 
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestEngine_DynamicTemplatePersistenceAndRecovery(t *testing.T) {
 	engine.RegisterTemplate(name, tmpl)
 
 	// Simulate crash: create new engine instance
-	engine2, err := NewEngine(store)
+	engine2, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine2: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestEngine_HookInvocationCounts(t *testing.T) {
 			t.Fatalf("failed to close store: %v", err)
 		}
 	}()
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestEngine_FailFastErrorBypassesRetries(t *testing.T) {
 			t.Fatalf("failed to close store: %v", err)
 		}
 	}()
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -335,7 +335,7 @@ func TestEngine_WrappedFailFastErrorBypassesRetries(t *testing.T) {
 			t.Fatalf("failed to close store: %v", err)
 		}
 	}()
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestEngine_NormalRetryPolicyStillWorks(t *testing.T) {
 			t.Fatalf("failed to close store: %v", err)
 		}
 	}()
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -426,7 +426,7 @@ func TestEngine_StepPanic(t *testing.T) {
 		}
 	}()
 
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -487,7 +487,7 @@ func TestEngine_StepTimeout(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -565,7 +565,7 @@ func TestEngine_StepTimeoutWithRetry(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}

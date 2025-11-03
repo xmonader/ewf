@@ -17,7 +17,7 @@ import (
 //
 // This test ensures basic workflow execution, step registration, and state propagation work as expected.
 func TestWorkflow_Run_Simple(t *testing.T) {
-	engine, err := NewEngine(nil)
+	engine, err := NewEngine()
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 //
 // This test ensures workflows properly handle step failures.
 func TestWorkflow_Run_Fail(t *testing.T) {
-	engine, err := NewEngine(nil)
+	engine, err := NewEngine()
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 //
 // This test ensures the retry policy works correctly for transient failures.
 func TestWorkflow_Run_Retry(t *testing.T) {
-	engine, err := NewEngine(nil)
+	engine, err := NewEngine()
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 //
 // This test ensures workflows fail if all retries are exhausted and do not proceed to subsequent steps.
 func TestWorkflow_Run_Retry_Failure(t *testing.T) {
-	engine, err := NewEngine(nil)
+	engine, err := NewEngine()
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(store)
+	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}

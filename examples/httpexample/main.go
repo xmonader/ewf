@@ -31,7 +31,7 @@ func NewApp(logger *log.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sqlite store: %v", err)
 	}
-	engine, err := ewf.NewEngine(store)
+	engine, err := ewf.NewEngine(ewf.Withstore(store))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %v", err)
 	}
