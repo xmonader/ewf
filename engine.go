@@ -226,7 +226,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
 					wf, err := q.Dequeue(ctx)
 
 					if err != nil && err != ErrQueueNotFound {
-						fmt.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
+						log.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
 						continue
 					}
 
@@ -234,12 +234,12 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
 						continue
 					}
 
-					fmt.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
+					log.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
 
 					if err := e.RunSync(ctx, wf); err != nil {
-						fmt.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
 					} else {
-						fmt.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
+						log.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
 					}
 				}
 			}

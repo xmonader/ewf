@@ -3,6 +3,7 @@ package ewf
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -119,7 +120,7 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 			case <-ticker.C:
 				length, err := q.client.LLen(ctx, q.name).Result()
 				if err != nil {
-					fmt.Printf("failed to check queue length: %v", err)
+					log.Printf("failed to check queue length: %v", err)
 					continue
 				}
 
@@ -132,13 +133,13 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 
 					if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
 
-						fmt.Printf("auto-deleting empty queue: %s\n", q.name)
+						log.Printf("auto-deleting empty queue: %s\n", q.name)
 
 						if err := e.CloseQueue(ctx, q.name); err != nil {
-							fmt.Printf("error deleting queue: %v", err)
+							log.Printf("error deleting queue: %v", err)
 							return
 						}
-						fmt.Printf("Successfully auto-deleted queue: %s\n", q.name)
+						log.Printf("Successfully auto-deleted queue: %s\n", q.name)
 					}
 				}
 			}
