@@ -9,7 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var ErrQueueNotFound = fmt.Errorf("queue not found")
 
 var _ QueueEngine = (*RedisQueueEngine)(nil)
 
@@ -32,13 +31,9 @@ func NewRedisQueueEngine(address string) *RedisQueueEngine {
 	}
 }
 
-// CreateQueue creates a new queue and uses 0 timeout by default for dequeue operations
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
-	return e.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, 0)
-}
 
-// CreateQueue creates a new queue and uses the passes timeout for dequeue operations
-func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, popTimeout time.Duration) (Queue, error) {
+// CreateQueue creates a new queue
+func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -52,7 +47,6 @@ func (e *RedisQueueEngine) CreateQueueWithTimeout(ctx context.Context, queueName
 		workersDefinition,
 		queueOptions,
 		e.client,
-		popTimeout,
 	)
 
 	e.queues[queueName] = q

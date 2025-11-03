@@ -31,7 +31,6 @@ func TestEnqueueDequeue(t *testing.T) {
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
-		1*time.Second,
 	)
 	defer func() {
 		if err := queue.Close(t.Context()); err != nil {
@@ -103,7 +102,6 @@ func TestClose(t *testing.T) {
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
-		1*time.Second,
 	)
 	err = queue.Close(t.Context())
 	if err != nil {

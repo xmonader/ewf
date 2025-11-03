@@ -3,11 +3,10 @@ package ewf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // Engine is the central component for managing and executing workflows.
@@ -19,6 +18,9 @@ type Engine struct {
 	store       Store
 	queueEngine QueueEngine
 }
+
+// ErrQueueNotFound indicates that the queue is empty, deleted or never created
+var ErrQueueNotFound error = errors.New("queue empty or doesn't exist")
 
 type EngineOption func(*Engine)
 
@@ -201,53 +203,29 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workflowName
 		return nil, err
 	}
 
-	if redisQueue, ok := queue.(*RedisQueue); ok {
-		e.startQueueWorkers(ctx, redisQueue)
-	}
+	e.startQueueWorkers(ctx, queue)
 
 	return queue, nil
 }
 
-// CreateQueueWithTimeout creates a new queue with specific pop timeout and starts workers for it
-func (e *Engine) CreateQueueWithTimeout(ctx context.Context, queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, popTimeout time.Duration) (Queue, error) {
-	if e.queueEngine == nil {
-		return nil, fmt.Errorf("no queue engine configured")
-	}
-
-	redisQueueEngine, ok := e.queueEngine.(*RedisQueueEngine)
-	if !ok {
-		return nil, fmt.Errorf("queue engine does not support timeout configuration")
-	}
-
-	queue, err := redisQueueEngine.CreateQueueWithTimeout(ctx, queueName, workflowName, workersDefinition, queueOptions, popTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	if redisQueue, ok := queue.(*RedisQueue); ok {
-		e.startQueueWorkers(ctx, redisQueue)
-	}
-
-	return queue, nil
-}
-
-func (e *Engine) startQueueWorkers(ctx context.Context, q *RedisQueue) {
-	for i := 0; i < q.workersDef.Count; i++ {
+func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
+	workersDef := q.WorkersDefinition()
+	for i := 0; i < workersDef.Count; i++ {
 
 		go func(workerID int) {
-			ticker := time.NewTicker(q.workersDef.PollInterval)
+			ticker := time.NewTicker(workersDef.PollInterval)
 			defer ticker.Stop()
 
 			for {
 				select {
 				case <-ctx.Done():
 					return
-				case <-q.closeCh:
+				case <-q.CloseCh():
 					return
 				case <-ticker.C:
 					wf, err := q.Dequeue(ctx)
 
-					if err != nil && err != redis.Nil {
+					if err != nil && err != ErrQueueNotFound {
 						fmt.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
 						continue
 					}

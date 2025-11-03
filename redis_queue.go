@@ -21,6 +21,7 @@ type WorkersDefinition struct {
 type QueueOptions struct {
 	AutoDelete  bool          // Delete when no longer in use
 	DeleteAfter time.Duration // Ignored if AutoDelete is false
+	popTimeout  time.Duration // timeout for dequeue operations
 }
 
 var _ Queue = (*RedisQueue)(nil)
@@ -33,11 +34,10 @@ type RedisQueue struct {
 	queueOptions QueueOptions      // options for the queue
 	client       *redis.Client     // Redis client
 	closeCh      chan struct{}     // channel to signal closure
-	popTimeout   time.Duration     // timeout for dequeue operations
-	closeOnce    sync.Once		   // ensure closing the queue by one worker only 
+	closeOnce    sync.Once         // ensure closing the queue by one worker only
 }
 
-func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, popTimeout time.Duration) *RedisQueue {
+func NewRedisQueue(queueName string, workflowName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		workflowName: workflowName,
@@ -45,13 +45,22 @@ func NewRedisQueue(queueName string, workflowName string, workersDefinition Work
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
-		popTimeout:   popTimeout,
 	}
 }
 
 // Name returns the name of the queue
 func (q *RedisQueue) Name() string {
 	return q.name
+}
+
+// WorkersDefinition returns the queue workers definition
+func (q *RedisQueue) WorkersDefinition() WorkersDefinition {
+	return q.workersDef
+}
+
+// CloseCh returns the channel to signal queue closure
+func (q *RedisQueue) CloseCh() <-chan struct{} {
+	return q.closeCh
 }
 
 // WorkflowName returns the associated workflow name of the queue
@@ -74,7 +83,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
 	// default timeout to 1 second if not set
-	timeout := q.popTimeout
+	timeout := q.queueOptions.popTimeout
 	if timeout <= 0 {
 		timeout = 1 * time.Second
 	}
@@ -82,8 +91,9 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	res, err := q.client.BRPop(ctx, timeout, q.name).Result()
 
 	if err == redis.Nil {
-		return nil, err
+		return nil, ErrQueueNotFound
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("dequeue error %w", err)
 	}
