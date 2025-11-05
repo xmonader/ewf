@@ -3,7 +3,6 @@ package ewf
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -18,9 +17,6 @@ type Engine struct {
 	store       Store
 	queueEngine QueueEngine
 }
-
-// ErrQueueNotFound indicates that the queue is empty, deleted or never created
-var ErrQueueNotFound error = errors.New("queue empty or doesn't exist")
 
 type EngineOption func(*Engine)
 
@@ -225,7 +221,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
 				case <-ticker.C:
 					wf, err := q.Dequeue(ctx)
 
-					if err != nil && err != ErrQueueNotFound {
+					if err != nil {
 						log.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
 						continue
 					}
@@ -234,12 +230,8 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
 						continue
 					}
 
-					log.Printf("Worker %d: processing workflow %s\n", workerID, wf.Name)
-
 					if err := e.RunSync(ctx, wf); err != nil {
 						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
-					} else {
-						log.Printf("Worker %d: successfully processed workflow %s\n", workerID, wf.Name)
 					}
 				}
 			}

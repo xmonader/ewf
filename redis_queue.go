@@ -10,19 +10,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// WorkersDefinition defines the worker pool for processing workflows in the queue
-type WorkersDefinition struct {
-	Count        int           // number of workers
-	PollInterval time.Duration // interval between polling the queue for new workflows
-}
-
-// QueueOptions defines options for the queue
-type QueueOptions struct {
-	AutoDelete  bool          // Delete when no longer in use
-	DeleteAfter time.Duration // Ignored if AutoDelete is false
-	popTimeout  time.Duration // timeout for dequeue operations
-}
-
 var _ Queue = (*RedisQueue)(nil)
 
 // RedisQueue is the Redis implementation of the Queue interface
@@ -82,10 +69,10 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	res, err := q.client.BRPop(ctx, timeout, q.name).Result()
 
 	if err == redis.Nil {
-		return nil, ErrQueueNotFound
+		return nil, nil
 	}
 
-	if err != nil {
+	if err != nil || len(res) < 2 {
 		return nil, fmt.Errorf("dequeue error %w", err)
 	}
 

@@ -116,9 +116,5 @@ func TestClose(t *testing.T) {
 		t.Errorf("expected queue to be deleted, but it still exists")
 	}
 
-	// try to dequeue from closed queue
-	_, err = queue.Dequeue(t.Context())
-	if err == nil {
-		t.Errorf("expected error when dequeuing from closed queue, got nil")
-	}
+
 }

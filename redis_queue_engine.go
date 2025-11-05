@@ -2,6 +2,7 @@ package ewf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 )
+
+// ErrQueueNotFound indicates that the queue is deleted or never created
+var ErrQueueNotFound error = errors.New("queue doesn't exist")
 
 var _ QueueEngine = (*RedisQueueEngine)(nil)
 
@@ -20,11 +24,7 @@ type RedisQueueEngine struct {
 }
 
 // NewRedisQueueEngine creates a new RedisQueueEngine with the given Redis address
-func NewRedisQueueEngine(address string) *RedisQueueEngine {
-	client := redis.NewClient(&redis.Options{
-		Addr: address,
-	})
-
+func NewRedisQueueEngine(client *redis.Client) *RedisQueueEngine {
 	return &RedisQueueEngine{
 		client: client,
 		queues: make(map[string]*RedisQueue),

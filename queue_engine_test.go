@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func waitStep(duration time.Duration) StepFn {
@@ -34,7 +36,10 @@ func registerWf(wfengine *Engine, t *testing.T, wfName string) {
 
 // TestCreateAndGetQueue creates a queue engine, creates a queue, gets the created queue, and tries to get a non existing queue
 func TestCreateAndGetQueue(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	engine := NewRedisQueueEngine(client)
 	defer func() {
 		if err := engine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
@@ -74,7 +79,10 @@ func TestCreateAndGetQueue(t *testing.T) {
 
 // TestCloseQueue tests closing a queue and trying to get a closed queue, and closing a non existing queue
 func TestCloseQueue(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	engine := NewRedisQueueEngine(client)
 	defer func() {
 		if err := engine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
@@ -112,7 +120,10 @@ func TestCloseQueue(t *testing.T) {
 
 // TestCloseEngine tests closing the engine with multiple queues and ensures all queues are closed, and tries to get a queue after engine is closed
 func TestCloseEngine(t *testing.T) {
-	engine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	engine := NewRedisQueueEngine(client)
 
 	for i := 0; i < 3; i++ {
 		_, err := engine.CreateQueue(
@@ -144,7 +155,11 @@ func TestCloseEngine(t *testing.T) {
 
 // TestAutoDelete tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map
 func TestAutoDelete(t *testing.T) {
-	qEngine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	qEngine := NewRedisQueueEngine(client)
+
 	defer func() {
 		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
@@ -187,7 +202,11 @@ func TestAutoDelete(t *testing.T) {
 
 // TestAutoDeleteMultipleQueues tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map for 3 queues
 func TestAutoDeleteMultipleQueues(t *testing.T) {
-	qEngine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	qEngine := NewRedisQueueEngine(client)
+
 	defer func() {
 		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
@@ -237,22 +256,17 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 
 // TestWorkerLoop tests that one worker can dequeue and process workflows correctly
 func TestWorkerLoop(t *testing.T) {
-	qEngine := NewRedisQueueEngine("localhost:6379")
-	defer func() {
-		if err := qEngine.Close(t.Context()); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
 
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	qEngine := NewRedisQueueEngine(client)
+
+	t.Cleanup(func() {
+		if err := qEngine.Close(t.Context()); err != nil {
+			t.Errorf("failed to close queue engine: %v", err)
 		}
-	}()
+	})
 
 	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
@@ -325,20 +339,14 @@ func TestWorkerLoop(t *testing.T) {
 
 // TestWorkerLoopMultiWorkers tests that multiple workers can dequeue and process workflows concurrently
 func TestWorkerLoopMultiWorkers(t *testing.T) {
-	qEngine := NewRedisQueueEngine("localhost:6379")
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	qEngine := NewRedisQueueEngine(client)
+
 	defer func() {
 		if err := qEngine.Close(t.Context()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
-		}
-	}()
-
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
 		}
 	}()
 
