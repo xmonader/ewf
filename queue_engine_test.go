@@ -9,6 +9,34 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// checkQueueDeleted checks that queue is deleted from redis, queue engine map, channel is closed
+func checkQueueDeleted(t *testing.T, qEngine *RedisQueueEngine, q *RedisQueue) {
+	t.Helper()
+
+	// queue should now be deleted from redis
+	exists, err := qEngine.client.Exists(t.Context(), q.Name()).Result()
+	if err != nil {
+		t.Fatalf("failed to check Redis key: %v", err)
+	}
+	if exists != 0 {
+		t.Errorf("expected queue to be deleted from Redis, but it still exists")
+	}
+
+	// try to get the closed queue
+	_, err = qEngine.GetQueue(t.Context(), "test-queue")
+	if err != ErrQueueNotFound {
+		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
+	}
+
+	// check that closeCh was closed after deletion
+	select {
+	case <-q.closeCh:
+		// success
+	default:
+		t.Errorf("expected closeCh to be closed after delete")
+	}
+}
+
 func waitStep(duration time.Duration) StepFn {
 	return func(ctx context.Context, state State) error {
 		time.Sleep(duration)
@@ -40,11 +68,11 @@ func TestCreateAndGetQueue(t *testing.T) {
 		&redis.Options{Addr: "localhost:6379"},
 	)
 	engine := NewRedisQueueEngine(client)
-	defer func() {
-		if err := engine.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
-	}()
+	})
 
 	q, err := engine.CreateQueue(
 		t.Context(),
@@ -83,13 +111,13 @@ func TestCloseQueue(t *testing.T) {
 		&redis.Options{Addr: "localhost:6379"},
 	)
 	engine := NewRedisQueueEngine(client)
-	defer func() {
-		if err := engine.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
-	}()
+	})
 
-	_, err := engine.CreateQueue(
+	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
 		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
@@ -105,11 +133,7 @@ func TestCloseQueue(t *testing.T) {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	// try to get the closed queue
-	_, err = engine.GetQueue(t.Context(), "test-queue")
-	if err != ErrQueueNotFound {
-		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
-	}
+	checkQueueDeleted(t, engine, q.(*RedisQueue))
 
 	// close a non existing queue
 	err = engine.CloseQueue(t.Context(), "test")
@@ -160,11 +184,11 @@ func TestAutoDelete(t *testing.T) {
 	)
 	qEngine := NewRedisQueueEngine(client)
 
-	defer func() {
-		if err := qEngine.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := qEngine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
-	}()
+	})
 
 	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
@@ -184,20 +208,7 @@ func TestAutoDelete(t *testing.T) {
 	// wait for longer than DeleteAfter duration
 	time.Sleep(5 * time.Second)
 
-	// check if the queue itself is removed from redis
-	exists, err := q.(*RedisQueue).client.Exists(t.Context(), "test-queue").Result()
-	if err != nil {
-		t.Fatalf("failed to check queue existence: %v", err)
-	}
-	if exists != 0 {
-		t.Errorf("expected queue to be deleted from Redis")
-	}
-
-	// check if the queue is removed from engine's map
-	_, err = qEngine.GetQueue(t.Context(), "test-queue")
-	if err != ErrQueueNotFound {
-		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
-	}
+	checkQueueDeleted(t, qEngine, q.(*RedisQueue))
 }
 
 // TestAutoDeleteMultipleQueues tests creating a queue with AutoDelete option, waits for time larger than DeleteAfter duration, and checks if the queue is deleted from redis and engine map for 3 queues
@@ -207,11 +218,11 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 	)
 	qEngine := NewRedisQueueEngine(client)
 
-	defer func() {
-		if err := qEngine.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := qEngine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
-	}()
+	})
 
 	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
@@ -236,20 +247,7 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	for _, q := range createdQueues {
-		// check if the queue itself is removed from redis
-		exists, err := q.(*RedisQueue).client.Exists(t.Context(), q.Name()).Result()
-		if err != nil {
-			t.Fatalf("failed to check queue existence: %v", err)
-		}
-		if exists != 0 {
-			t.Errorf("expected queue to be deleted from Redis")
-		}
-
-		// check if the queue is removed from engine's map
-		_, err = qEngine.GetQueue(t.Context(), q.Name())
-		if err != ErrQueueNotFound {
-			t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
-		}
+		checkQueueDeleted(t, qEngine, q.(*RedisQueue))
 	}
 
 }
@@ -263,7 +261,7 @@ func TestWorkerLoop(t *testing.T) {
 	qEngine := NewRedisQueueEngine(client)
 
 	t.Cleanup(func() {
-		if err := qEngine.Close(t.Context()); err != nil {
+		if err := qEngine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close queue engine: %v", err)
 		}
 	})
@@ -319,22 +317,7 @@ func TestWorkerLoop(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	// queue should now be deleted from redis
-	exists, err := qEngine.client.Exists(t.Context(), "test-worker-queue").Result()
-	if err != nil {
-		t.Fatalf("failed to check Redis key: %v", err)
-	}
-	if exists != 0 {
-		t.Errorf("expected queue to be deleted from Redis, but it still exists")
-	}
-
-	// check that closeCh was closed after auto-deletion
-	select {
-	case <-queue.(*RedisQueue).closeCh:
-		// success
-	default:
-		t.Errorf("expected closeCh to be closed after auto-delete")
-	}
+	checkQueueDeleted(t, qEngine, queue.(*RedisQueue))
 }
 
 // TestWorkerLoopMultiWorkers tests that multiple workers can dequeue and process workflows concurrently
@@ -344,11 +327,11 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 	)
 	qEngine := NewRedisQueueEngine(client)
 
-	defer func() {
-		if err := qEngine.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := qEngine.Close(context.Background()); err != nil {
 			t.Errorf("failed to close engine: %v", err)
 		}
-	}()
+	})
 
 	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
@@ -401,20 +384,73 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	// queue should now be deleted from redis
-	exists, err := qEngine.client.Exists(t.Context(), "test-worker-queue").Result()
+	checkQueueDeleted(t, qEngine, queue.(*RedisQueue))
+}
+
+func TestEnqueueIdleTimeReset(t *testing.T) {
+	client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+
+	store, err := NewSQLiteStore("test.db")
 	if err != nil {
-		t.Fatalf("failed to check Redis key: %v", err)
-	}
-	if exists != 0 {
-		t.Errorf("expected queue to be deleted from Redis, but it still exists")
+		t.Fatalf("store error: %v", err)
 	}
 
-	// check that closeCh was closed after auto-deletion
-	select {
-	case <-queue.(*RedisQueue).closeCh:
-		// success
-	default:
-		t.Errorf("expected closeCh to be closed after auto-delete")
+	qEngine := NewRedisQueueEngine(client)
+
+	t.Cleanup(func() {
+		if err := qEngine.Close(context.Background()); err != nil {
+			t.Errorf("failed to close engine: %v", err)
+		}
+
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	})
+
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
+	if err != nil {
+		t.Fatalf("wf engine error: %v", err)
 	}
+
+	// now idleSince is initialized to time.now
+	q, err := wfengine.CreateQueue(
+		t.Context(),
+		"test-queue",
+		WorkersDefinition{Count: 1, PollInterval: 500 * time.Millisecond},
+		QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
+	)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+
+	// sleep for 1s, time since idleSince should be 1s now
+	time.Sleep(1 * time.Second)
+
+	workflow := NewWorkflow("test-workflow", WithStore(store))
+
+	// now time since idleSince should be reset to 0 on enqueue
+	err = q.Enqueue(t.Context(), workflow)
+	if err != nil {
+		t.Fatalf("failed to enqueue workflow: %v", err)
+	}
+
+	// Dequeue it immediately to simulate quick processing
+	_, err = q.Dequeue(t.Context())
+	if err != nil {
+		t.Fatalf("failed to dequeue workflow: %v", err)
+	}
+
+	// wait one more second --> less than DeleteAfter since enqueue
+	time.Sleep(1 * time.Second)
+
+	_, err = qEngine.GetQueue(t.Context(), q.Name())
+	if err != nil {
+		t.Errorf(" expected err to be nil because queue still exists, got %v", err)
+	}
+
+	time.Sleep(3 * time.Second)
+
+	checkQueueDeleted(t, qEngine, q.(*RedisQueue))
 }

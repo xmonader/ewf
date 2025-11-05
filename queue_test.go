@@ -1,6 +1,7 @@
 package ewf
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -19,23 +20,24 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatalf("store error: %v", err)
 	}
 
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
+	idleSince := time.Now()
 
 	queue := NewRedisQueue(
 		"test-queue",
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
+		&idleSince,
 	)
-	defer func() {
-		if err := queue.Close(t.Context()); err != nil {
+	t.Cleanup(func() {
+		if err := queue.Close(context.Background()); err != nil {
 			t.Errorf("failed to close queue: %v", err)
 		}
-	}()
+
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	})
 
 	for i := 0; i < 5; i++ {
 		workflow := NewWorkflow(fmt.Sprintf("test-workflow%d", i), WithStore(store))
@@ -85,23 +87,16 @@ func TestClose(t *testing.T) {
 		Addr: "localhost:6379",
 	})
 
-	store, err := NewSQLiteStore("test.db")
-	if err != nil {
-		t.Fatalf("store error: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			t.Errorf("failed to close store: %v", err)
-		}
-	}()
+	idleSince := time.Now()
 
 	queue := NewRedisQueue(
 		"test-queue",
 		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
 		QueueOptions{AutoDelete: false},
 		client,
+		&idleSince,
 	)
-	err = queue.Close(t.Context())
+	err := queue.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
@@ -115,6 +110,5 @@ func TestClose(t *testing.T) {
 	if exists != 0 {
 		t.Errorf("expected queue to be deleted, but it still exists")
 	}
-
 
 }

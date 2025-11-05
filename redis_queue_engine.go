@@ -40,11 +40,14 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 		return nil, fmt.Errorf("queue %s already exists", queueName)
 	}
 
+	idleSince := time.Now()
+
 	q := NewRedisQueue(
 		queueName,
 		workersDefinition,
 		queueOptions,
 		e.client,
+		&idleSince,
 	)
 
 	e.queues[queueName] = q
@@ -110,7 +113,6 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 		ticker := time.NewTicker(q.workersDef.PollInterval)
 		defer ticker.Stop()
 
-		var idleSince *time.Time
 		for {
 			select {
 			case <-ctx.Done():
@@ -125,13 +127,8 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 				}
 
 				if length == 0 {
-					now := time.Now()
 
-					if idleSince == nil {
-						idleSince = &now
-					}
-
-					if time.Since(*idleSince) >= q.queueOptions.DeleteAfter {
+					if time.Since(*q.idleSince) >= q.queueOptions.DeleteAfter {
 
 						log.Printf("auto-deleting empty queue: %s\n", q.name)
 

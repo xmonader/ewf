@@ -19,15 +19,17 @@ type RedisQueue struct {
 	queueOptions QueueOptions      // options for the queue
 	client       *redis.Client     // Redis client
 	closeCh      chan struct{}     // channel to signal closure
+	idleSince    *time.Time        // queue idle time used in auto-deletion
 }
 
-func NewRedisQueue(queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
+func NewRedisQueue(queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, idleSince *time.Time) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		workersDef:   workersDefinition,
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
+		idleSince:    idleSince,
 	}
 }
 
@@ -54,7 +56,15 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 		return fmt.Errorf("failed to marshal workflow %w", err)
 	}
 
-	return q.client.LPush(ctx, q.name, data).Err()
+	err = q.client.LPush(ctx, q.name, data).Err()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	q.idleSince = &now
+	
+	return nil
 }
 
 // Dequeue retrieves and removes a workflow from the queue
