@@ -20,8 +20,8 @@ type Engine struct {
 
 // WorkersDefinition defines the worker pool for processing workflows in the queue
 type WorkersDefinition struct {
-	Count        int           // number of workers
-	PollInterval time.Duration // interval between polling the queue for new workflows
+	Count        int           `json:"worker_count"`  // number of workers
+	PollInterval time.Duration `json:"poll_interval"` // interval between polling the queue for new workflows
 }
 
 type EngineOption func(*Engine)

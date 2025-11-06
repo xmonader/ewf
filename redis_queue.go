@@ -67,7 +67,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
 	// default timeout to 1 second if not set
-	timeout := q.queueOptions.popTimeout
+	timeout := q.queueOptions.PopTimeout
 	if timeout <= 0 {
 		timeout = 1 * time.Second
 	}

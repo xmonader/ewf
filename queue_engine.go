@@ -15,7 +15,7 @@ type QueueEngine interface {
 
 // QueueOptions defines options for the queue
 type QueueOptions struct {
-	AutoDelete  bool          // Delete when no longer in use
-	DeleteAfter time.Duration // Ignored if AutoDelete is false
-	popTimeout  time.Duration // timeout for dequeue operations
+	AutoDelete  bool          `json:"auto_delete"`  // Delete when no longer in use
+	DeleteAfter time.Duration `json:"delete_after"` // Ignored if AutoDelete is false
+	PopTimeout  time.Duration `json:"pop_timeout"`  // timeout for dequeue operations
 }
