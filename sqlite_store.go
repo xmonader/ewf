@@ -248,7 +248,7 @@ func (s *SQLiteStore) LoadAllWorkflowTemplates(ctx context.Context) (map[string]
 }
 
 // SaveQueueMetadata saves the QueueMetadata into sqlite store
-func (s *SQLiteStore) SaveQueueSettings(ctx context.Context, settings *QueueSettings) error {
+func (s *SQLiteStore) SaveQueueMetadata(ctx context.Context, settings *QueueMetadata) error {
 
 	data, err := json.Marshal(settings)
 	if err != nil {
@@ -264,7 +264,7 @@ func (s *SQLiteStore) SaveQueueSettings(ctx context.Context, settings *QueueSett
 }
 
 // LoadAllQueues loads all queues from the SQLite database.
-func (s *SQLiteStore) LoadAllQueueSettings(ctx context.Context) ([]*QueueSettings, error) {
+func (s *SQLiteStore) LoadAllQueueMetadata(ctx context.Context) ([]*QueueMetadata, error) {
 	query := `SELECT name, data FROM queues`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -276,7 +276,7 @@ func (s *SQLiteStore) LoadAllQueueSettings(ctx context.Context) ([]*QueueSetting
 		}
 	}()
 
-	var queues []*QueueSettings
+	var queues []*QueueMetadata
 	for rows.Next() {
 		var name string
 		var data []byte
@@ -284,7 +284,7 @@ func (s *SQLiteStore) LoadAllQueueSettings(ctx context.Context) ([]*QueueSetting
 			return nil, fmt.Errorf("sqlite store: failed to scan queue: %w", err)
 		}
 
-		var q QueueSettings
+		var q QueueMetadata
 		if err := json.Unmarshal(data, &q); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal queue: %w", err)
 		}
