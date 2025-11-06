@@ -32,7 +32,7 @@ func NewRedisQueueEngine(client *redis.Client) *RedisQueueEngine {
 }
 
 // CreateQueue creates a new queue
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, queueOptions QueueOptions) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -44,7 +44,6 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, wo
 
 	q := NewRedisQueue(
 		queueName,
-		workersDefinition,
 		queueOptions,
 		e.client,
 		&idleSince,
@@ -110,7 +109,7 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue) {
 
 	go func() {
-		ticker := time.NewTicker(q.workersDef.PollInterval)
+		ticker := time.NewTicker(1*time.Second) // TODO: FIX
 		defer ticker.Stop()
 
 		for {
@@ -129,8 +128,6 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 				if length == 0 {
 
 					if time.Since(*q.idleSince) >= q.queueOptions.DeleteAfter {
-
-						log.Printf("auto-deleting empty queue: %s\n", q.name)
 
 						if err := e.CloseQueue(ctx, q.name); err != nil {
 							log.Printf("error deleting queue: %v", err)

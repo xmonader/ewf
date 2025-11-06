@@ -78,7 +78,6 @@ func TestCreateAndGetQueue(t *testing.T) {
 	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
-		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
 	if err != nil {
@@ -121,7 +120,6 @@ func TestCloseQueue(t *testing.T) {
 	q, err := engine.CreateQueue(
 		t.Context(),
 		"test-queue",
-		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
 
@@ -154,7 +152,6 @@ func TestCloseEngine(t *testing.T) {
 		_, err := engine.CreateQueue(
 			t.Context(),
 			fmt.Sprintf("test-queue-%d", i),
-			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 		)
 		if err != nil {

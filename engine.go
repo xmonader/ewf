@@ -18,6 +18,12 @@ type Engine struct {
 	queueEngine QueueEngine
 }
 
+// WorkersDefinition defines the worker pool for processing workflows in the queue
+type WorkersDefinition struct {
+	Count        int           // number of workers
+	PollInterval time.Duration // interval between polling the queue for new workflows
+}
+
 type EngineOption func(*Engine)
 
 func Withstore(store Store) EngineOption {
@@ -189,27 +195,27 @@ func (e *Engine) ResumeRunningWorkflows() {
 }
 
 // CreateQueue creates a new queue and starts workers for it
-func (e *Engine) CreateQueue(ctx context.Context, queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
 	if e.queueEngine == nil {
 		return nil, fmt.Errorf("no queue engine configured")
 	}
 
-	queue, err := e.queueEngine.CreateQueue(ctx, queueName, workersDefinition, queueOptions)
+	queue, err := e.queueEngine.CreateQueue(ctx, queueName, queueOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	e.startQueueWorkers(ctx, queue)
+	e.startQueueWorkers(ctx, queue, workerDef)
 
 	return queue, nil
 }
 
-func (e *Engine) startQueueWorkers(ctx context.Context, q Queue) {
-	workersDef := q.WorkersDefinition()
-	for i := 0; i < workersDef.Count; i++ {
+func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef WorkersDefinition) {
+
+	for i := 0; i < workerDef.Count; i++ {
 
 		go func(workerID int) {
-			ticker := time.NewTicker(workersDef.PollInterval)
+			ticker := time.NewTicker(workerDef.PollInterval)
 			defer ticker.Stop()
 
 			for {

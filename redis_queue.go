@@ -14,18 +14,16 @@ var _ Queue = (*RedisQueue)(nil)
 
 // RedisQueue is the Redis implementation of the Queue interface
 type RedisQueue struct {
-	name         string            // name of the queue
-	workersDef   WorkersDefinition // definition of the worker pool
-	queueOptions QueueOptions      // options for the queue
-	client       *redis.Client     // Redis client
-	closeCh      chan struct{}     // channel to signal closure
-	idleSince    *time.Time        // queue idle time used in auto-deletion
+	name         string        // name of the queue
+	queueOptions QueueOptions  // some queue configurations
+	client       *redis.Client // Redis client
+	closeCh      chan struct{} // channel to signal closure
+	idleSince    *time.Time    // queue idle time used in auto-deletion
 }
 
-func NewRedisQueue(queueName string, workersDefinition WorkersDefinition, queueOptions QueueOptions, client *redis.Client, idleSince *time.Time) *RedisQueue {
+func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client, idleSince *time.Time) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
-		workersDef:   workersDefinition,
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
@@ -38,10 +36,6 @@ func (q *RedisQueue) Name() string {
 	return q.name
 }
 
-// WorkersDefinition returns the queue workers definition
-func (q *RedisQueue) WorkersDefinition() WorkersDefinition {
-	return q.workersDef
-}
 
 // CloseCh returns the channel to signal queue closure
 func (q *RedisQueue) CloseCh() <-chan struct{} {
@@ -63,7 +57,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 
 	now := time.Now()
 	q.idleSince = &now
-	
+
 	return nil
 }
 
