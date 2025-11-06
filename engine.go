@@ -22,6 +22,7 @@ type Engine struct {
 type WorkersDefinition struct {
 	Count        int           `json:"worker_count"`  // number of workers
 	PollInterval time.Duration `json:"poll_interval"` // interval between polling the queue for new workflows
+	WorkTimeout  time.Duration `json:"work_timeout"`  // timeout for worker to process work
 }
 
 type EngineOption func(*Engine)
@@ -264,9 +265,28 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 						continue
 					}
 
-					if err := e.RunSync(ctx, wf); err != nil {
-						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+					workCtx := ctx
+					cancel := func() {}
+					if workerDef.WorkTimeout > 0 {
+						workCtx, cancel = context.WithTimeout(ctx, workerDef.WorkTimeout)
 					}
+					defer cancel()
+
+					doneCh := make(chan error, 1)
+
+					go func() {
+						doneCh <- e.RunSync(workCtx, wf)
+					}()
+
+					select {
+					case err := <-doneCh:
+						if err != nil {
+							log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+						}
+					case <-workCtx.Done():
+						log.Printf("Worker %d: workflow %s timed out after %v\n", workerID, wf.Name, workerDef.WorkTimeout)
+					}
+
 				}
 			}
 		}(i)

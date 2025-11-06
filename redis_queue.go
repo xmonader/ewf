@@ -78,8 +78,18 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 		return nil, nil
 	}
 
-	if err != nil || len(res) < 2 {
+	if err != nil {
 		return nil, fmt.Errorf("dequeue error %w", err)
+	}
+
+	// signal queue activity, avoid blocking on full channel
+	select {
+	case q.activityCh <- struct{}{}:
+	default:
+	}
+
+	if len(res) < 2 {
+		return nil, fmt.Errorf("dequeue error: result length should be at least 2")
 	}
 
 	var wf Workflow
