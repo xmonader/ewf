@@ -138,6 +138,7 @@ type Store interface {
 	LoadWorkflowTemplate(ctx context.Context, name string) (*WorkflowTemplate, error)
 	LoadAllWorkflowTemplates(ctx context.Context) (map[string]*WorkflowTemplate, error)
 	SaveQueueMetadata(ctx context.Context, meta *QueueMetadata) error
+	DeleteQueueMetadata(ctx context.Context, name string) error
 	LoadAllQueueMetadata(ctx context.Context) ([]*QueueMetadata, error)
 	Close() error // could be a no-op, no problem.
 }

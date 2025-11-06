@@ -62,6 +62,23 @@ func NewEngine(opts ...EngineOption) (*Engine, error) {
 		}
 	}
 
+	if engine.queueEngine != nil && engine.store != nil {
+		ctx := context.Background()
+		queues, err := engine.store.LoadAllQueueMetadata(ctx)
+
+		if err == nil {
+			for _, qm := range queues {
+				q, err := engine.queueEngine.CreateQueue(ctx, qm.Name, qm.QueueOptions)
+				if err != nil {
+					log.Printf("failed to recreate queue %s: %v", qm.Name, err)
+					continue
+				}
+
+				engine.startQueueWorkers(ctx, q, qm.WorkersDef)
+			}
+		}
+	}
+
 	return engine, nil
 }
 
@@ -205,6 +222,16 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 		return nil, err
 	}
 
+	// save queue configurations to sqlite store
+	err = e.Store().SaveQueueMetadata(ctx, &QueueMetadata{
+		Name:         queueName,
+		WorkersDef:   workerDef,
+		QueueOptions: queueOptions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to save queue settings: %v", err)
+	}
+
 	e.startQueueWorkers(ctx, queue, workerDef)
 
 	return queue, nil
@@ -226,7 +253,6 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 					return
 				case <-ticker.C:
 					wf, err := q.Dequeue(ctx)
-
 					if err != nil {
 						log.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
 						continue

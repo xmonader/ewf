@@ -295,3 +295,12 @@ func (s *SQLiteStore) LoadAllQueueMetadata(ctx context.Context) ([]*QueueMetadat
 	}
 	return queues, nil
 }
+// DeleteQueueMetadata removes a queue by name from the SQLite store.
+func (s *SQLiteStore) DeleteQueueMetadata(ctx context.Context, name string) error {
+	query := `DELETE FROM queues WHERE name = ?`
+	_, err := s.db.ExecContext(ctx, query, name)
+	if err != nil {
+		return fmt.Errorf("sqlite store: failed to delete queue %s: %w", name, err)
+	}
+	return nil
+}
