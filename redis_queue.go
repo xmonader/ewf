@@ -18,16 +18,16 @@ type RedisQueue struct {
 	queueOptions QueueOptions  // some queue configurations
 	client       *redis.Client // Redis client
 	closeCh      chan struct{} // channel to signal closure
-	idleSince    *time.Time    // queue idle time used in auto-deletion
+	activityCh   chan struct{} // channel used to signal activity to avoid queue auto-deletion
 }
 
-func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client, idleSince *time.Time) *RedisQueue {
+func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
 	return &RedisQueue{
 		name:         queueName,
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
-		idleSince:    idleSince,
+		activityCh:   make(chan struct{}, 1), // buffered to avoid blocking on each enqueue signal
 	}
 }
 
@@ -35,7 +35,6 @@ func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Cl
 func (q *RedisQueue) Name() string {
 	return q.name
 }
-
 
 // CloseCh returns the channel to signal queue closure
 func (q *RedisQueue) CloseCh() <-chan struct{} {
@@ -55,8 +54,11 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 		return err
 	}
 
-	now := time.Now()
-	q.idleSince = &now
+	// signal queue activity, avoid blocking on full channel
+	select {
+	case q.activityCh <- struct{}{}:
+	default:
+	}
 
 	return nil
 }

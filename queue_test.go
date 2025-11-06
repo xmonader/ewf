@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -20,13 +19,10 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatalf("store error: %v", err)
 	}
 
-	idleSince := time.Now()
-
 	queue := NewRedisQueue(
 		"test-queue",
 		QueueOptions{AutoDelete: false},
 		client,
-		&idleSince,
 	)
 	t.Cleanup(func() {
 		if err := queue.Close(context.Background()); err != nil {
@@ -86,13 +82,10 @@ func TestClose(t *testing.T) {
 		Addr: "localhost:6379",
 	})
 
-	idleSince := time.Now()
-
 	queue := NewRedisQueue(
 		"test-queue",
 		QueueOptions{AutoDelete: false},
 		client,
-		&idleSince,
 	)
 	err := queue.Close(t.Context())
 	if err != nil {

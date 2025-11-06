@@ -40,13 +40,10 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 		return nil, fmt.Errorf("queue %s already exists", queueName)
 	}
 
-	idleSince := time.Now()
-
 	q := NewRedisQueue(
 		queueName,
 		queueOptions,
 		e.client,
-		&idleSince,
 	)
 
 	e.queues[queueName] = q
@@ -109,8 +106,8 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue) {
 
 	go func() {
-		ticker := time.NewTicker(1*time.Second) // TODO: FIX
-		defer ticker.Stop()
+		timer := time.NewTimer(q.queueOptions.DeleteAfter)
+		defer timer.Stop()
 
 		for {
 			select {
@@ -118,7 +115,14 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 				return
 			case <-q.closeCh:
 				return
-			case <-ticker.C:
+			case <-q.activityCh: // queue is active, reset timer
+				if !timer.Stop() {
+					<-timer.C // drain if needed
+				}
+				timer.Reset(q.queueOptions.DeleteAfter)
+
+			case <-timer.C: // timer expired, close queue if it's empty
+
 				length, err := q.client.LLen(ctx, q.name).Result()
 				if err != nil {
 					log.Printf("failed to check queue length: %v", err)
@@ -126,15 +130,12 @@ func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue)
 				}
 
 				if length == 0 {
-
-					if time.Since(*q.idleSince) >= q.queueOptions.DeleteAfter {
-
-						if err := e.CloseQueue(ctx, q.name); err != nil {
-							log.Printf("error deleting queue: %v", err)
-							return
-						}
+					if err := e.CloseQueue(ctx, q.name); err != nil {
+						log.Printf("error deleting queue: %v", err)
+					} else {
 						log.Printf("Successfully auto-deleted queue: %s\n", q.name)
 					}
+					return
 				}
 			}
 		}
