@@ -222,14 +222,16 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 		return nil, err
 	}
 
-	// save queue configurations to sqlite store
-	err = e.Store().SaveQueueMetadata(ctx, &QueueMetadata{
-		Name:         queueName,
-		WorkersDef:   workerDef,
-		QueueOptions: queueOptions,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to save queue settings: %v", err)
+	if e.Store() != nil {
+		// save queue configurations to sqlite store
+		err = e.Store().SaveQueueMetadata(ctx, &QueueMetadata{
+			Name:         queueName,
+			WorkersDef:   workerDef,
+			QueueOptions: queueOptions,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to save queue settings: %v", err)
+		}
 	}
 
 	e.startQueueWorkers(ctx, queue, workerDef)
