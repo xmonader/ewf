@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ErrFailWorkflowNow is a special error that can be returned by a step to indicate that the workflow should be failed immediately.
@@ -136,6 +137,8 @@ type Store interface {
 	SaveWorkflowTemplate(ctx context.Context, name string, tmpl *WorkflowTemplate) error
 	LoadWorkflowTemplate(ctx context.Context, name string) (*WorkflowTemplate, error)
 	LoadAllWorkflowTemplates(ctx context.Context) (map[string]*WorkflowTemplate, error)
+	SaveQueueSettings(ctx context.Context, meta *QueueSettings) error
+	LoadAllQueueSettings(ctx context.Context) ([]*QueueSettings, error)
 	Close() error // could be a no-op, no problem.
 }
 
