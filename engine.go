@@ -305,11 +305,7 @@ func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions Qu
 			case <-q.CloseCh():
 				return
 			case <-q.ActivityCh(): // queue is active, reset timer
-				if !timer.Stop() {
-					<-timer.C // drain if needed
-				}
 				timer.Reset(queueOptions.DeleteAfter)
-
 			case <-timer.C: // timer expired, close queue if it's empty
 
 				length, err := q.Length(ctx)
