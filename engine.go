@@ -274,11 +274,11 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 					if workerDef.WorkTimeout > 0 {
 						workCtx, cancel = context.WithTimeout(ctx, workerDef.WorkTimeout)
 					}
-					defer cancel()
 
 					if err := e.RunSync(workCtx, wf); err != nil {
 						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
 					}
+					cancel()
 				}
 			}
 		}(i)

@@ -124,13 +124,11 @@ func (q *redisQueue) deleteQueue(ctx context.Context) error {
 
 // Close closes the queue and deletes it from Redis
 func (q *redisQueue) Close(ctx context.Context) error {
-
-	if q.closeCh != nil {
-		select {
-		case <-q.closeCh: // already closed
-		default:
-			close(q.closeCh)
-		}
+	select {
+	case <-q.closeCh: // already closed
+	default:
+		close(q.closeCh)
 	}
+
 	return q.deleteQueue(ctx)
 }
