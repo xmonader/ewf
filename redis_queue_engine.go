@@ -7,25 +7,25 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var _ QueueEngine = (*RedisQueueEngine)(nil)
+var _ QueueEngine = (*redisQueueEngine)(nil)
 
-// RedisQueueEngine is the Redis implementation of the QueueEngine interface
-type RedisQueueEngine struct {
+// redisQueueEngine is the Redis implementation of the QueueEngine interface
+type redisQueueEngine struct {
 	client *redis.Client
 	mu     sync.Mutex
 	queues map[string]*redisQueue
 }
 
 // NewRedisQueueEngine creates a new RedisQueueEngine with the given Redis address
-func NewRedisQueueEngine(client *redis.Client) *RedisQueueEngine {
-	return &RedisQueueEngine{
+func NewRedisQueueEngine(client *redis.Client) QueueEngine {
+	return &redisQueueEngine{
 		client: client,
 		queues: make(map[string]*redisQueue),
 	}
 }
 
 // CreateQueue creates a new queue
-func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, queueOptions QueueOptions) (Queue, error) {
+func (e *redisQueueEngine) CreateQueue(ctx context.Context, queueName string, queueOptions QueueOptions) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -45,7 +45,7 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 }
 
 // GetQueue retrieves an existing queue by its name
-func (e *RedisQueueEngine) GetQueue(ctx context.Context, queueName string) (Queue, error) {
+func (e *redisQueueEngine) GetQueue(ctx context.Context, queueName string) (Queue, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -58,7 +58,7 @@ func (e *RedisQueueEngine) GetQueue(ctx context.Context, queueName string) (Queu
 }
 
 // CloseQueue closes and removes a queue by its name
-func (e *RedisQueueEngine) CloseQueue(ctx context.Context, queueName string) error {
+func (e *redisQueueEngine) CloseQueue(ctx context.Context, queueName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -77,7 +77,7 @@ func (e *RedisQueueEngine) CloseQueue(ctx context.Context, queueName string) err
 }
 
 // Close closes all queues and the Redis client
-func (e *RedisQueueEngine) Close(ctx context.Context) error {
+func (e *redisQueueEngine) Close(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

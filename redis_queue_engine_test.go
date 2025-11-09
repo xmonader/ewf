@@ -13,9 +13,10 @@ import (
 )
 
 // checkQueueDeleted checks that queue is deleted from redis, queue engine map, channel is closed
-func checkQueueDeleted(t *testing.T, qEngine *RedisQueueEngine, q *redisQueue) {
+func checkQueueDeleted(t *testing.T, engine QueueEngine, q *redisQueue) {
 	t.Helper()
 
+	qEngine := engine.(*redisQueueEngine)
 	// queue should now be deleted from redis
 	exists, err := qEngine.client.Exists(t.Context(), q.Name()).Result()
 	if err != nil {
@@ -86,7 +87,7 @@ func TestCreateAndGetQueue(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	if engine.queues["test-queue"] == nil {
+	if engine.(*redisQueueEngine).queues["test-queue"] == nil {
 		t.Errorf("expected queue to be created")
 	}
 
@@ -166,7 +167,7 @@ func TestCloseEngine(t *testing.T) {
 		t.Fatalf("failed to close engine: %v", err)
 	}
 
-	if len(engine.queues) != 0 {
+	if len(engine.(*redisQueueEngine).queues) != 0 {
 		t.Errorf("expected all queues to be closed")
 	}
 
@@ -312,7 +313,7 @@ func TestWorkerLoop(t *testing.T) {
 		time.Sleep(5 * time.Second)
 
 		// the queue should be empty after workers dequeue everything
-		length, err := qEngine.client.LLen(t.Context(), "test-worker-queue").Result()
+		length, err := queue.Length(t.Context())
 		if err != nil {
 			t.Fatalf("failed to check queue length: %v", err)
 		}
@@ -382,7 +383,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 		time.Sleep(5 * time.Second)
 
 		// the queue should be empty after workers dequeue everything
-		length, err := qEngine.client.LLen(t.Context(), "test-worker-queue").Result()
+		length, err := queue.Length(t.Context())
 		if err != nil {
 			t.Fatalf("failed to check queue length: %v", err)
 		}
