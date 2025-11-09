@@ -2,8 +2,15 @@ package ewf
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrQueueNotFound indicates that the queue is deleted or never created
+var ErrQueueNotFound error = errors.New("queue doesn't exist")
+
+// ErrQueueAlreadyExists indicates that the queue already exists in queue engine
+var ErrQueueAlreadyExists error = errors.New("queue already exists")
 
 // QueueEngine defines the interface for a queue engine that manages multiple queues
 type QueueEngine interface {

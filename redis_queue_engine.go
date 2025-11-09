@@ -2,15 +2,10 @@ package ewf
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
-
-// ErrQueueNotFound indicates that the queue is deleted or never created
-var ErrQueueNotFound error = errors.New("queue doesn't exist")
 
 var _ QueueEngine = (*RedisQueueEngine)(nil)
 
@@ -18,14 +13,14 @@ var _ QueueEngine = (*RedisQueueEngine)(nil)
 type RedisQueueEngine struct {
 	client *redis.Client
 	mu     sync.Mutex
-	queues map[string]*RedisQueue
+	queues map[string]*redisQueue
 }
 
 // NewRedisQueueEngine creates a new RedisQueueEngine with the given Redis address
 func NewRedisQueueEngine(client *redis.Client) *RedisQueueEngine {
 	return &RedisQueueEngine{
 		client: client,
-		queues: make(map[string]*RedisQueue),
+		queues: make(map[string]*redisQueue),
 	}
 }
 
@@ -35,7 +30,7 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 	defer e.mu.Unlock()
 
 	if _, ok := e.queues[queueName]; ok {
-		return nil, fmt.Errorf("queue %s already exists", queueName)
+		return nil, ErrQueueAlreadyExists
 	}
 
 	q := NewRedisQueue(
@@ -44,7 +39,7 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 		e.client,
 	)
 
-	e.queues[queueName] = q
+	e.queues[queueName] = q.(*redisQueue)
 
 	return q, nil
 }
@@ -93,7 +88,6 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 		}
 	}
 
-	e.queues = make(map[string]*RedisQueue)
+	e.queues = make(map[string]*redisQueue)
 	return e.client.Close()
 }
-

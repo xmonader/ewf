@@ -276,21 +276,9 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 					}
 					defer cancel()
 
-					doneCh := make(chan error, 1)
-
-					go func() {
-						doneCh <- e.RunSync(workCtx, wf)
-					}()
-
-					select {
-					case err := <-doneCh:
-						if err != nil {
-							log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
-						}
-					case <-workCtx.Done():
-						log.Printf("Worker %d: workflow %s timed out after %v\n", workerID, wf.Name, workerDef.WorkTimeout)
+					if err := e.RunSync(workCtx, wf); err != nil {
+						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
 					}
-
 				}
 			}
 		}(i)
@@ -309,7 +297,6 @@ func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions Qu
 
 	go func() {
 		timer := time.NewTimer(queueOptions.DeleteAfter)
-		defer timer.Stop()
 
 		for {
 			select {

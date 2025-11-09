@@ -10,10 +10,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var _ Queue = (*RedisQueue)(nil)
+var _ Queue = (*redisQueue)(nil)
 
-// RedisQueue is the Redis implementation of the Queue interface
-type RedisQueue struct {
+// redisQueue is the Redis implementation of the Queue interface
+type redisQueue struct {
 	name         string        // name of the queue
 	queueOptions QueueOptions  // some queue configurations
 	client       *redis.Client // Redis client
@@ -21,23 +21,23 @@ type RedisQueue struct {
 	activityCh   chan struct{} // channel used to signal activity to avoid queue auto-deletion
 }
 
-func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) *RedisQueue {
-	return &RedisQueue{
+func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) Queue {
+	return &redisQueue{
 		name:         queueName,
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
-		activityCh:   make(chan struct{}, 1), // buffered to avoid blocking on each enqueue signal
+		activityCh:   make(chan struct{}),
 	}
 }
 
 // Name returns the name of the queue
-func (q *RedisQueue) Name() string {
+func (q *redisQueue) Name() string {
 	return q.name
 }
 
 // Length returns the length of the queue
-func (q *RedisQueue) Length(ctx context.Context) (int64, error) {
+func (q *redisQueue) Length(ctx context.Context) (int64, error) {
 	length, err := q.client.LLen(ctx, q.name).Result()
 	if err != nil {
 		return -1, fmt.Errorf("failed to get queue length: %v", err)
@@ -46,17 +46,17 @@ func (q *RedisQueue) Length(ctx context.Context) (int64, error) {
 }
 
 // CloseCh returns the channel to signal queue closure
-func (q *RedisQueue) CloseCh() <-chan struct{} {
+func (q *redisQueue) CloseCh() <-chan struct{} {
 	return q.closeCh
 }
 
 // ActivityCh returns the channel to signal queue activity
-func (q *RedisQueue) ActivityCh() <-chan struct{} {
+func (q *redisQueue) ActivityCh() <-chan struct{} {
 	return q.activityCh
 }
 
 // Enqueue adds a workflow to the queue
-func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
+func (q *redisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 
 	data, err := json.Marshal(workflow)
 	if err != nil {
@@ -78,7 +78,7 @@ func (q *RedisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 }
 
 // Dequeue retrieves and removes a workflow from the queue
-func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
+func (q *redisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 
 	// default timeout to 1 second if not set
 	timeout := q.queueOptions.PopTimeout
@@ -114,7 +114,7 @@ func (q *RedisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	return &wf, nil
 }
 
-func (q *RedisQueue) deleteQueue(ctx context.Context) error {
+func (q *redisQueue) deleteQueue(ctx context.Context) error {
 	if err := q.client.Del(ctx, q.name).Err(); err != nil {
 		return fmt.Errorf("failed to delete queue %s: %v", q.name, err)
 	}
@@ -123,7 +123,7 @@ func (q *RedisQueue) deleteQueue(ctx context.Context) error {
 }
 
 // Close closes the queue and deletes it from Redis
-func (q *RedisQueue) Close(ctx context.Context) error {
+func (q *redisQueue) Close(ctx context.Context) error {
 
 	if q.closeCh != nil {
 		select {

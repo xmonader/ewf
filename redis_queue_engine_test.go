@@ -13,7 +13,7 @@ import (
 )
 
 // checkQueueDeleted checks that queue is deleted from redis, queue engine map, channel is closed
-func checkQueueDeleted(t *testing.T, qEngine *RedisQueueEngine, q *RedisQueue) {
+func checkQueueDeleted(t *testing.T, qEngine *RedisQueueEngine, q *redisQueue) {
 	t.Helper()
 
 	// queue should now be deleted from redis
@@ -134,7 +134,7 @@ func TestCloseQueue(t *testing.T) {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	checkQueueDeleted(t, engine, q.(*RedisQueue))
+	checkQueueDeleted(t, engine, q.(*redisQueue))
 
 	// close a non existing queue
 	err = engine.CloseQueue(t.Context(), "test")
@@ -209,7 +209,7 @@ func TestAutoDelete(t *testing.T) {
 		// wait for longer than DeleteAfter duration
 		time.Sleep(5 * time.Second)
 
-		checkQueueDeleted(t, qEngine, q.(*RedisQueue))
+		checkQueueDeleted(t, qEngine, q.(*redisQueue))
 	})
 }
 
@@ -251,7 +251,7 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 		time.Sleep(5 * time.Second)
 
 		for _, q := range createdQueues {
-			checkQueueDeleted(t, qEngine, q.(*RedisQueue))
+			checkQueueDeleted(t, qEngine, q.(*redisQueue))
 		}
 	})
 }
@@ -322,7 +322,7 @@ func TestWorkerLoop(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, queue.(*RedisQueue))
+		checkQueueDeleted(t, qEngine, queue.(*redisQueue))
 	})
 }
 
@@ -392,7 +392,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, queue.(*RedisQueue))
+		checkQueueDeleted(t, qEngine, queue.(*redisQueue))
 	})
 }
 
@@ -463,7 +463,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, q.(*RedisQueue))
+		checkQueueDeleted(t, qEngine, q.(*redisQueue))
 	})
 }
 
@@ -529,8 +529,8 @@ func TestStoreActions(t *testing.T) {
 			t.Errorf("Expected queues len to be 1, got %d", len(queues))
 		}
 
-		if !reflect.DeepEqual(queues[0],expected){
-			t.Errorf("expected stored queue to be %v, got %v",expected,queues[0])
+		if !reflect.DeepEqual(queues[0], expected) {
+			t.Errorf("expected stored queue to be %v, got %v", expected, queues[0])
 		}
 
 		// do some activity

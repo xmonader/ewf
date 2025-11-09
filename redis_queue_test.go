@@ -42,7 +42,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		}
 	}
 
-	len, err := queue.client.LLen(t.Context(), "test-queue").Result()
+	len, err := queue.Length(t.Context())
 	if err != nil {
 		t.Fatalf("failed to get queue length: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	}
 
 	// check queue is empty now
-	len, err = queue.client.LLen(t.Context(), "test-queue").Result()
+	len, err = queue.Length(t.Context())
 	if err != nil {
 		t.Fatalf("failed to get queue length: %v", err)
 	}
@@ -87,12 +87,20 @@ func TestClose(t *testing.T) {
 		QueueOptions{AutoDelete: false},
 		client,
 	)
-	err := queue.Close(t.Context())
+
+	// enqueue an item for the queue to actually exist in redis
+	err := queue.Enqueue(t.Context(),NewWorkflow("test-wf"))
+	if err != nil {
+		t.Fatalf("failed to enqueue: %v", err)
+	}
+
+	
+	err = queue.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	exists, err := queue.client.Exists(t.Context(), "test-queue").Result()
+	exists, err := queue.(*redisQueue).client.Exists(t.Context(), "test-queue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue existence: %v", err)
 	}
