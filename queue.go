@@ -11,4 +11,6 @@ type Queue interface {
 	Dequeue(ctx context.Context) (*Workflow, error)
 	Close(ctx context.Context) error
 	CloseCh() <-chan struct{}
+	ActivityCh() <-chan struct{}
+	Length(ctx context.Context) (int64, error)
 }

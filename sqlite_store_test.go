@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -199,7 +200,7 @@ func TestSQLiteStore_SaveAndLoadQueues(t *testing.T) {
 	}
 
 	if len(queues) != 4 {
-		t.Errorf("Expected queue len to be 4, got %d", len(queues))
+		t.Errorf("Expected queues len to be 4, got %d", len(queues))
 	}
 
 	for i, q := range queues {
@@ -218,4 +219,58 @@ func TestSQLiteStore_SaveAndLoadQueues(t *testing.T) {
 		}
 	}
 
+}
+
+// TestSQLiteStore_DeleteQueue tests deleting a queue from SQLiteStore.
+func TestSQLiteStore_DeleteQueue(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dbFile := "./test.db"
+
+		store, err := NewSQLiteStore(dbFile)
+		if err != nil {
+			t.Fatalf("NewSQLiteStore() error = %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Remove(dbFile); err != nil {
+				t.Fatalf("failed to remove dbFile: %v", err)
+			}
+
+			if err := store.Close(); err != nil {
+				t.Fatalf("failed to close store: %v", err)
+			}
+		})
+
+		if err := store.Setup(); err != nil {
+			t.Fatalf("Prepare() error = %v", err)
+		}
+
+		name := "store_test_queue"
+		workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
+		queueOpts := QueueOptions{AutoDelete: false, PopTimeout: 1 * time.Second}
+
+		queueMetaData := &QueueMetadata{
+			Name:         name,
+			WorkersDef:   workersDef,
+			QueueOptions: queueOpts,
+		}
+
+		err = store.SaveQueueMetadata(context.Background(), queueMetaData)
+		if err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+
+		err = store.DeleteQueueMetadata(context.Background(), queueMetaData.Name)
+		if err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+
+		queues, err := store.LoadAllQueueMetadata(context.Background())
+		if err != nil {
+			t.Fatalf("loadAll() error = %v", err)
+		}
+
+		if len(queues) != 0 {
+			t.Errorf("Expected queues len to be 0, got %d", len(queues))
+		}
+	})
 }

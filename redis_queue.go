@@ -36,9 +36,23 @@ func (q *RedisQueue) Name() string {
 	return q.name
 }
 
+// Length returns the length of the queue
+func (q *RedisQueue) Length(ctx context.Context) (int64, error) {
+	length, err := q.client.LLen(ctx, q.name).Result()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get queue length: %v", err)
+	}
+	return length, nil
+}
+
 // CloseCh returns the channel to signal queue closure
 func (q *RedisQueue) CloseCh() <-chan struct{} {
 	return q.closeCh
+}
+
+// ActivityCh returns the channel to signal queue activity
+func (q *RedisQueue) ActivityCh() <-chan struct{} {
+	return q.activityCh
 }
 
 // Enqueue adds a workflow to the queue

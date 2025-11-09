@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -47,10 +45,6 @@ func (e *RedisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 	)
 
 	e.queues[queueName] = q
-
-	if queueOptions.AutoDelete {
-		e.monitorAutoDelete(ctx, q)
-	}
 
 	return q, nil
 }
@@ -103,41 +97,3 @@ func (e *RedisQueueEngine) Close(ctx context.Context) error {
 	return e.client.Close()
 }
 
-func (e *RedisQueueEngine) monitorAutoDelete(ctx context.Context, q *RedisQueue) {
-
-	go func() {
-		timer := time.NewTimer(q.queueOptions.DeleteAfter)
-		defer timer.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-q.closeCh:
-				return
-			case <-q.activityCh: // queue is active, reset timer
-				if !timer.Stop() {
-					<-timer.C // drain if needed
-				}
-				timer.Reset(q.queueOptions.DeleteAfter)
-
-			case <-timer.C: // timer expired, close queue if it's empty
-
-				length, err := q.client.LLen(ctx, q.name).Result()
-				if err != nil {
-					log.Printf("failed to check queue length: %v", err)
-					continue
-				}
-
-				if length == 0 {
-					if err := e.CloseQueue(ctx, q.name); err != nil {
-						log.Printf("error deleting queue: %v", err)
-					} else {
-						log.Printf("Successfully auto-deleted queue: %s\n", q.name)
-					}
-					return
-				}
-			}
-		}
-	}()
-}

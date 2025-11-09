@@ -235,6 +235,10 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 		}
 	}
 
+	if queueOptions.AutoDelete && queueOptions.DeleteAfter > 0 {
+		e.monitorAutoDelete(ctx, queue, queueOptions)
+	}
+
 	e.startQueueWorkers(ctx, queue, workerDef)
 
 	return queue, nil
@@ -291,4 +295,54 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 			}
 		}(i)
 	}
+}
+
+func (e *Engine) deleteFromStore(ctx context.Context, q Queue) error {
+	if e.Store() != nil {
+		err := e.Store().DeleteQueueMetadata(ctx, q.Name())
+		return err
+	}
+	return nil
+}
+
+func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions QueueOptions) {
+
+	go func() {
+		timer := time.NewTimer(queueOptions.DeleteAfter)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-q.CloseCh():
+				return
+			case <-q.ActivityCh(): // queue is active, reset timer
+				if !timer.Stop() {
+					<-timer.C // drain if needed
+				}
+				timer.Reset(queueOptions.DeleteAfter)
+
+			case <-timer.C: // timer expired, close queue if it's empty
+
+				length, err := q.Length(ctx)
+				if err != nil {
+					log.Printf("failed to check queue length: %v", err)
+					continue
+				}
+
+				if length == 0 {
+					if err := e.queueEngine.CloseQueue(ctx, q.Name()); err != nil {
+						log.Printf("error deleting queue: %v", err)
+
+					} else {
+						if err := e.deleteFromStore(ctx, q); err != nil {
+							log.Printf("error deleting queue: %s from store\n", q.Name())
+						}
+					}
+					return
+				}
+			}
+		}
+	}()
 }
