@@ -3,6 +3,8 @@ package ewf
 import (
 	"context"
 	"fmt"
+	"os"
+	"reflect"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -462,5 +464,96 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		time.Sleep(3 * time.Second)
 
 		checkQueueDeleted(t, qEngine, q.(*RedisQueue))
+	})
+}
+
+// TestStoreActions tests storing, auto-deleting a queue from Store.
+func TestStoreActions(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dbFile := "./test.db"
+
+		store, err := NewSQLiteStore(dbFile)
+		if err != nil {
+			t.Fatalf("NewSQLiteStore() error = %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.Remove(dbFile); err != nil {
+				t.Fatalf("failed to remove dbFile: %v", err)
+			}
+
+			if err := store.Close(); err != nil {
+				t.Fatalf("failed to close store: %v", err)
+			}
+		})
+
+		// create queue engine
+		client := redis.NewClient(
+			&redis.Options{Addr: "localhost:6379"},
+		)
+		qEngine := NewRedisQueueEngine(client)
+		t.Cleanup(func() {
+			if err := qEngine.Close(context.Background()); err != nil {
+				t.Errorf("failed to close engine: %v", err)
+			}
+		})
+
+		// Create an engine with the store, queue engine
+		engine, err := NewEngine(Withstore(store), WithQueueEngine(qEngine))
+		if err != nil {
+			t.Fatalf("failed to create engine: %v", err)
+		}
+
+		name := "store_test_queue"
+		workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
+		queueOpts := QueueOptions{AutoDelete: true, PopTimeout: 1 * time.Second, DeleteAfter: 1 * time.Second}
+
+		// create queue
+		q, err := engine.CreateQueue(t.Context(), name, workersDef, queueOpts)
+		if err != nil {
+			t.Fatalf("failed to create queue: %v", err)
+		}
+
+		// check queue is saved to store
+		queues, err := store.LoadAllQueueMetadata(context.Background())
+		if err != nil {
+			t.Fatalf("loadAll() error = %v", err)
+		}
+
+		expected := &QueueMetadata{
+			Name:         name,
+			WorkersDef:   workersDef,
+			QueueOptions: queueOpts,
+		}
+
+		if len(queues) != 1 {
+			t.Errorf("Expected queues len to be 1, got %d", len(queues))
+		}
+
+		if !reflect.DeepEqual(queues[0],expected){
+			t.Errorf("expected stored queue to be %v, got %v",expected,queues[0])
+		}
+
+		// do some activity
+		err = q.Enqueue(t.Context(), NewWorkflow("name"))
+		if err != nil {
+			t.Fatalf("failed to enqueue: %v", err)
+		}
+
+		_, err = q.Dequeue(t.Context())
+		if err != nil {
+			t.Fatalf("failed to enqueue: %v", err)
+		}
+
+		// sleep to auto-delete
+		time.Sleep(2 * time.Second)
+
+		queues, err = store.LoadAllQueueMetadata(context.Background())
+		if err != nil {
+			t.Fatalf("loadAll() error = %v", err)
+		}
+
+		if len(queues) != 0 {
+			t.Errorf("Expected queues len to be 0, got %d", len(queues))
+		}
 	})
 }
