@@ -274,7 +274,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(Withstore(store))
+	engine, err := NewEngine(WithStore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 	}()
 
 	// Create an engine with the store
-	engine, err := NewEngine(Withstore(store))
+	engine, err := NewEngine(WithStore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}

@@ -499,7 +499,7 @@ func TestStoreActions(t *testing.T) {
 		qEngine := NewRedisQueueEngine(client)
 
 		// Create an engine with the store, queue engine
-		engine, err := NewEngine(Withstore(store), WithQueueEngine(qEngine))
+		engine, err := NewEngine(WithStore(store), WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("failed to create engine: %v", err)
 		}

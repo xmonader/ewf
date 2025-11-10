@@ -42,7 +42,7 @@ func WithQueue(name string) RunOption {
 
 type EngineOption func(*Engine)
 
-func Withstore(store Store) EngineOption {
+func WithStore(store Store) EngineOption {
 	return func(e *Engine) {
 		e.store = store
 	}
