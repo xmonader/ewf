@@ -23,9 +23,9 @@ type redisQueue struct {
 }
 
 func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) (Queue, error) {
-	alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	validName := regexp.MustCompile(`^[a-zA-Z0-9:_/]+$`)
 
-	if !alphanumeric.MatchString(queueName) {
+	if !validName.MatchString(queueName) {
 		return nil, fmt.Errorf("invalid queue name: %q, must be alphanumeric", queueName)
 	}
 	return &redisQueue{

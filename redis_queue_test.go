@@ -118,22 +118,42 @@ func TestClose(t *testing.T) {
 
 }
 
-// TestInvalidQueueName tests passing an invalid queue name and check that queue is not created
-func TestInvalidQueueName(t *testing.T) {
+// TestQueueName tests passing an different queue names and check for errors
+func TestQueueName(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
 
-	q, err := NewRedisQueue(
-		"test-queue!",
-		QueueOptions{AutoDelete: false},
-		client,
-	)
-	if err == nil {
-		t.Error("expected error, got nil")
-	}
-	if q != nil {
-		t.Error("expected queue to be nil")
-	}
+	t.Run("invalid queue name", func(t *testing.T) {
+		q, err := NewRedisQueue(
+			"test-queue!",
+			QueueOptions{AutoDelete: false},
+			client,
+		)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if q != nil {
+			t.Error("expected queue to be nil")
+		}
+	})
+
+	t.Run("valid queue name with :/_", func(t *testing.T) {
+		name := "deploy:users/123_queue:main"
+		q, err := NewRedisQueue(
+			name,
+			QueueOptions{AutoDelete: false},
+			client,
+		)
+		if err != nil {
+			t.Errorf("expected error to be nil, got %v", err)
+		}
+		if q == nil {
+			t.Error("expected queue to be created, got nil")
+		}
+		if q.Name() != name {
+			t.Errorf("expected queue name to be %s, got %s", name, q.Name())
+		}
+	})
 
 }
