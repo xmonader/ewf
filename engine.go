@@ -244,6 +244,26 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 	return queue, nil
 }
 
+// CloseQueue closes a queue by its name
+func (e *Engine) CloseQueue(ctx context.Context, queueName string) error {
+	if e.queueEngine == nil {
+		return fmt.Errorf("no queue engine configured")
+	}
+
+	err := e.queueEngine.CloseQueue(ctx, queueName)
+	if err != nil {
+		return fmt.Errorf("failed to close queue %s: %v", queueName, err)
+	}
+
+	if e.Store() != nil {
+		err = e.deleteFromStore(ctx, queueName)
+		if err != nil {
+			return fmt.Errorf("failed to delete queue %s from store: %v", queueName, err)
+		}
+	}
+	return nil
+}
+
 func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef WorkersDefinition) {
 
 	for i := 0; i < workerDef.Count; i++ {
@@ -285,9 +305,9 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 	}
 }
 
-func (e *Engine) deleteFromStore(ctx context.Context, q Queue) error {
+func (e *Engine) deleteFromStore(ctx context.Context, queueName string) error {
 	if e.Store() != nil {
-		err := e.Store().DeleteQueueMetadata(ctx, q.Name())
+		err := e.Store().DeleteQueueMetadata(ctx, queueName)
 		return err
 	}
 	return nil
@@ -319,7 +339,7 @@ func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions Qu
 						log.Printf("error deleting queue: %v", err)
 
 					} else {
-						if err := e.deleteFromStore(ctx, q); err != nil {
+						if err := e.deleteFromStore(ctx, q.Name()); err != nil {
 							log.Printf("error deleting queue: %s from store\n", q.Name())
 						}
 					}
