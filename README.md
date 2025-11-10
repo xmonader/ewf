@@ -5,7 +5,7 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 ## Core Features
 
 *   **Centralized Engine**: A powerful `Engine` manages workflow definitions, activities, and execution.
-*	**Queue-Based Execution** *(New)*: Integrates a lightweight in-memory queue for simultaneour and concurrent workflow processing.
+*	**Queue-Based Execution** *(New)*: Integrates a lightweight in-memory queue for simultaneous and concurrent workflow processing.
 *   **Stateful & Resilient Workflows**: Each workflow maintains its own state, which is persisted after each step to a `Store`.
 *   **Automatic Resumption**: The engine automatically finds and resumes interrupted workflows on startup, ensuring no work is lost.
 *   **Asynchronous Execution**: Run workflows in the background with a simple `RunAsync` method, perfect for use in HTTP servers and other concurrent applications.
@@ -48,7 +48,7 @@ go get github.com/xmonader/ewf
 *   **WorkflowTemplate**: A blueprint for a workflow, defining the sequence of activities (steps) to be executed.
 *   **Workflow**: A running instance of a `WorkflowTemplate`. Each workflow has a unique ID, its own state, and tracks its progress through the steps.
 *   **Store**: A persistence layer (e.g., `SQLiteStore`) that saves and loads workflow state, enabling resilience.
-*	**Queue**: A concurrent-safe in-memory structure that holds pending tasks or workflow jobs. 
+*	**Queue**: A concurrent-safe structure that holds pending tasks or workflow jobs. 
 *	**QueueEngine**: It acts as a scheduler and execution manager for queued jobs, ensuring:
 	- Automatic worker startup when a queue is created.
 	- Graceful shutdowns respecting context cancellation.
