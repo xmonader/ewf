@@ -5,7 +5,7 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 ## Core Features
 
 *   **Centralized Engine**: A powerful `Engine` manages workflow definitions, activities, and execution.
-*	**Queue-Based Execution** *(New)*: Integrates a lightweight in-memory queue for simultaneous and concurrent workflow processing.
+*	**Queue-Based Execution** *(New)*: Integrates a lightweight queue for simultaneous and concurrent workflow processing.
 *   **Stateful & Resilient Workflows**: Each workflow maintains its own state, which is persisted after each step to a `Store`.
 *   **Automatic Resumption**: The engine automatically finds and resumes interrupted workflows on startup, ensuring no work is lost.
 *   **Asynchronous Execution**: Run workflows in the background with a simple `RunAsync` method, perfect for use in HTTP servers and other concurrent applications.
@@ -47,7 +47,7 @@ go get github.com/xmonader/ewf
 *   **Activity**: A simple Go function (`StepFn`) that represents a single unit of work. Activities are registered with the engine by a unique name.
 *   **WorkflowTemplate**: A blueprint for a workflow, defining the sequence of activities (steps) to be executed.
 *   **Workflow**: A running instance of a `WorkflowTemplate`. Each workflow has a unique ID, its own state, and tracks its progress through the steps.
-*   **Store**: A persistence layer (e.g., `SQLiteStore`) that saves and loads workflow state, enabling resilience.
+*   **Store**: A persistence layer (e.g., `SQLiteStore`) that saves and loads workflow state and queue metadata, enabling resilience.
 *	**Queue**: A concurrent-safe structure that holds pending tasks or workflow jobs. 
 *	**QueueEngine**: It acts as a scheduler and execution manager for queued jobs, ensuring:
 	- Automatic worker startup when a queue is created.
@@ -135,43 +135,44 @@ func main() {
 This example shows the usage of the `Queue Engine`:
 
 ```go
-	engine := NewRedisQueueEngine("localhost:6379")
-	defer engine.Close(context)
-
-	store, err := NewSQLiteStore("store.db")
-	if err != nil {
-		return fmt.Errorf("error creating store: %w\n", err)
-	}
-	defer store.Close()
-
-	wfengine, err := NewEngine(store)
-	if err != nil {
-		return fmt.Errorf("error creating wf engine: %w\n", err)
-	}
-
-	q, err := engine.CreateQueue(
-		context,
-		"queue",
-		"workflow",
-		WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
-		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
-		wfengine,
+	client := redis.NewClient(
+			&redis.Options{Addr: "localhost:6379"},
 	)
+	qEngine := NewRedisQueueEngine(client)
 
-	gotQueue, err := engine.GetQueue(context, "queue")
+	wfengine, err := NewEngine(WithQueueEngine(qEngine))
 	if err != nil {
-		return fmt.Errorf("failed to get queue: %w\n", err)
+		log.Fatalf("wf engine error: %v", err)
+	}
+	defer func() {
+		if err := wfengine.Close(context); err != nil {
+			log.Fatalf("failed to close engine: %v", err)
+		}
 	}
 
-	err = engine.CloseQueue(context, "queue")
+    // queue with custom options
+	err = wfengine.CreateQueue(
+		context,
+		name,
+		WorkersDefinition{
+			Count:        1,
+			PollInterval: 300 * time.Millisecond,
+		},
+		QueueOptions{
+			AutoDelete:  true,
+			DeleteAfter: 2 * time.Second,
+			PopTimeout:  1 * time.Second,
+		},
+	)
 	if err != nil {
-		return fmt.Errorf("failed to close queue: %w\n", err)
+		log.Fatalf("failed to create queue: %v", err)
 	}
 
-	err := engine.Close(context)
+	workflow, err := wfengine.NewWorkflow(wfName)
 	if err != nil {
-		return fmt.Errorf("failed to close engine: %w\n", err)
+		log.Fatalf("failed to create workflow: %v", err)
 	}
+	wfengine.RunAsync(context, workflow, WithQueue(name))
 ```
 
 ## Retry Policy & Backoff Examples
