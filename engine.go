@@ -195,7 +195,7 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
 	defaultQueueOptions := QueueOptions{
 		AutoDelete:  true,
 		DeleteAfter: 1 * time.Minute,
-		PopTimeout: 1*time.Second,
+		PopTimeout:  1 * time.Second,
 	}
 
 	defaultWorkersDef := WorkersDefinition{
@@ -311,6 +311,22 @@ func (e *Engine) CloseQueue(ctx context.Context, queueName string) error {
 		err = e.deleteFromStore(ctx, queueName)
 		if err != nil {
 			return fmt.Errorf("failed to delete queue %s from store: %v", queueName, err)
+		}
+	}
+	return nil
+}
+
+// Close shutdowns the engine gracefully
+func (e *Engine) Close(ctx context.Context) error {
+	if e.queueEngine != nil {
+		if err := e.queueEngine.Close(ctx); err != nil {
+			return fmt.Errorf("failed to close queue engine: %v", err)
+		}
+	}
+
+	if e.Store() != nil {
+		if err := e.Store().Close(); err != nil {
+			return fmt.Errorf("failed to close store: %v", err)
 		}
 	}
 	return nil
