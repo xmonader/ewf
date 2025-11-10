@@ -3,6 +3,7 @@ package ewf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -133,7 +134,7 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 		return nil, fmt.Errorf("workflow template '%s' not registered", name)
 	}
 
-	w := NewWorkflow(name, WithStore(e.store))
+	w := NewWorkflow(name)
 	w.Steps = append([]Step{}, def.Steps...)
 	w.beforeWorkflowHooks = append([]BeforeWorkflowHook{}, def.BeforeWorkflowHooks...)
 	w.afterWorkflowHooks = append([]AfterWorkflowHook{}, def.AfterWorkflowHooks...)
@@ -152,7 +153,6 @@ func (e *Engine) rehydrate(w *Workflow) error {
 	if !ok {
 		return fmt.Errorf("workflow template '%s' not registered", w.Name)
 	}
-	w.SetStore(e.store) // Re-attach the store for resumed workflows
 	w.Steps = append([]Step{}, def.Steps...)
 	w.beforeWorkflowHooks = append([]BeforeWorkflowHook{}, def.BeforeWorkflowHooks...)
 	w.afterWorkflowHooks = append([]AfterWorkflowHook{}, def.AfterWorkflowHooks...)
@@ -179,7 +179,119 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 		hook(ctx, w)
 	}
 
-	return w.run(ctx, e.activities)
+	return e.run(ctx, w)
+}
+
+func (e *Engine) run(ctx context.Context, w *Workflow) error {
+	if w.Status == StatusCompleted {
+		return nil // Already completed
+	}
+	w.Status = StatusRunning
+
+	// Save workflow immediately when it starts running so it's visible in status checks
+	if e.store != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
+			return fmt.Errorf("failed to save workflow state when starting: %w", err)
+		}
+	}
+
+	// move to the current step
+	for i := w.CurrentStep; i < len(w.Steps); i++ {
+		step := w.Steps[i]
+
+		for _, stepHook := range w.beforeStepHooks {
+			stepHook(ctx, w, &step)
+		}
+
+		var attempts uint = 0
+		var stepErr error
+		activity, ok := e.activities[step.Name]
+		if !ok {
+			return fmt.Errorf("activity '%s' not registered", step.Name)
+		}
+
+		var bo BackOff
+		var maxAttempts uint = 1
+		if step.RetryPolicy != nil {
+			if step.RetryPolicy.BackOff != nil {
+				bo = WithContext(step.RetryPolicy.BackOff, ctx)
+				if step.RetryPolicy.MaxAttempts > 0 {
+					maxAttempts = step.RetryPolicy.MaxAttempts
+				}
+			}
+		}
+		if bo == nil {
+			// No retry policy or BackOff: single attempt, no retry
+			bo = WithContext(NewStopBackOff(), ctx)
+		}
+
+		attempts = 0
+		operation := func() error {
+			attempts++
+			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
+			if step.Timeout > 0 {
+				var cancel context.CancelFunc
+				ctxWithStep, cancel = context.WithTimeout(ctxWithStep, step.Timeout)
+				defer cancel()
+			}
+			// Panic safety
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						stepErr = fmt.Errorf("panic in step '%s': %v", step.Name, r)
+					}
+				}()
+				stepErr = activity(ctxWithStep, w.State)
+			}()
+			if ctxWithStep.Err() == context.DeadlineExceeded {
+				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
+			}
+			if errors.Is(stepErr, ErrFailWorkflowNow) {
+				return PermanentError(stepErr)
+			}
+			// Only return permanent error when we've exhausted retries or if the error is nil
+			if stepErr != nil {
+				if attempts >= maxAttempts {
+					return PermanentError(stepErr) // Mark as permanent on last attempt
+				}
+				return stepErr // Regular error for retry
+			}
+			return nil // No error
+		}
+
+		if err := Retry(operation, bo); err != nil {
+			stepErr = err
+		}
+		// After backoff.Retry, stepErr has the last error (or nil)
+
+		// --- After Step Hook ---
+		for _, hook := range w.afterStepHooks {
+			hook(ctx, w, &step, stepErr)
+		}
+
+		if stepErr != nil {
+			w.Status = StatusFailed
+			if e.store != nil {
+				_ = e.store.SaveWorkflow(ctx, w)
+			}
+			return fmt.Errorf("workflow failed: step %s: %w", step.Name, stepErr)
+		}
+
+		w.CurrentStep = i + 1
+		if e.store != nil {
+			if err := e.store.SaveWorkflow(ctx, w); err != nil {
+				return fmt.Errorf("failed to save workflow state after step %d: %v", w.CurrentStep-1, err)
+			}
+		}
+	}
+
+	w.Status = StatusCompleted
+	if e.store != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
+			return fmt.Errorf("failed to save final workflow state: %w", err)
+		}
+	}
+	return nil
 }
 
 // RunAsync runs a workflow asynchronously in a new goroutine.

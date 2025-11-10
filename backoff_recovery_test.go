@@ -150,9 +150,6 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 		t.Fatalf("Failed to deserialize workflow: %v", err)
 	}
 
-	// Set the store on the recovered workflow
-	recoveredWf.SetStore(store)
-
 	// Re-register the activity for the recovered workflow
 	engine2, err := NewEngine(Withstore(store))
 	if err != nil {

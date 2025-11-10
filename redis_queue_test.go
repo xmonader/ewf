@@ -39,7 +39,7 @@ func TestEnqueueDequeue(t *testing.T) {
 	})
 
 	for i := 0; i < 5; i++ {
-		workflow := NewWorkflow(fmt.Sprintf("test-workflow%d", i), WithStore(store))
+		workflow := NewWorkflow(fmt.Sprintf("test-workflow%d", i))
 		err = queue.Enqueue(t.Context(), workflow)
 		if err != nil {
 			t.Fatalf("failed to enqueue workflow: %v", err)

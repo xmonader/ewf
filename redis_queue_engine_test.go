@@ -448,7 +448,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		// sleep for 1s, time since idleSince should be 1s now
 		time.Sleep(1 * time.Second)
 
-		workflow := NewWorkflow("test-workflow", WithStore(store))
+		workflow := NewWorkflow("test-workflow")
 
 		// now time since idleSince should be reset to 0 on enqueue
 		wfengine.RunAsync(t.Context(), workflow, WithQueue(name))

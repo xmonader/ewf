@@ -154,7 +154,6 @@ type Workflow struct {
 	Steps       []Step         `json:"steps"`
 
 	// non persisted fields
-	store               Store                `json:"-"`
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`
 	afterWorkflowHooks  []AfterWorkflowHook  `json:"-"`
 	beforeStepHooks     []BeforeStepHook     `json:"-"`
@@ -170,24 +169,9 @@ type WorkflowTemplate struct {
 	AfterStepHooks      []AfterStepHook
 }
 
-// WorkflowOpt is a functional option for configuring a workflow.
-type WorkflowOpt func(w *Workflow)
-
-// WithStore sets the store for a workflow.
-func WithStore(store Store) WorkflowOpt {
-	return func(w *Workflow) {
-		w.store = store
-	}
-}
-
-// SetStore sets the store for the workflow.
-func (w *Workflow) SetStore(store Store) {
-	w.store = store
-}
-
 // NewWorkflow creates a new workflow instance with the given name and options.
-func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
-	w := &Workflow{
+func NewWorkflow(name string) *Workflow {
+	return &Workflow{
 		UUID:      uuid.New().String(),
 		Name:      name,
 		Status:    StatusPending,
@@ -195,121 +179,4 @@ func NewWorkflow(name string, opts ...WorkflowOpt) *Workflow {
 		State:     make(State),
 		CreatedAt: time.Now(),
 	}
-	for _, opt := range opts {
-		opt(w)
-	}
-	return w
-}
-
-func (w *Workflow) run(ctx context.Context, activities map[string]StepFn) (err error) {
-
-	if w.Status == StatusCompleted {
-		return nil // Already completed
-	}
-	w.Status = StatusRunning
-
-	// Save workflow immediately when it starts running so it's visible in status checks
-	if w.store != nil {
-		if err := w.store.SaveWorkflow(ctx, w); err != nil {
-			return fmt.Errorf("failed to save workflow state when starting: %w", err)
-		}
-	}
-
-	// move to the current step
-	for i := w.CurrentStep; i < len(w.Steps); i++ {
-		step := w.Steps[i]
-
-		for _, stepHook := range w.beforeStepHooks {
-			stepHook(ctx, w, &step)
-		}
-
-		var attempts uint = 0
-		var stepErr error
-		activity, ok := activities[step.Name]
-		if !ok {
-			return fmt.Errorf("activity '%s' not registered", step.Name)
-		}
-
-		var bo BackOff
-		var maxAttempts uint = 1
-		if step.RetryPolicy != nil {
-			if step.RetryPolicy.BackOff != nil {
-				bo = WithContext(step.RetryPolicy.BackOff, ctx)
-				if step.RetryPolicy.MaxAttempts > 0 {
-					maxAttempts = step.RetryPolicy.MaxAttempts
-				}
-			}
-		}
-		if bo == nil {
-			// No retry policy or BackOff: single attempt, no retry
-			bo = WithContext(NewStopBackOff(), ctx)
-		}
-
-		attempts = 0
-		operation := func() error {
-			attempts++
-			ctxWithStep := context.WithValue(ctx, StepNameContextKey, step.Name)
-			if step.Timeout > 0 {
-				var cancel context.CancelFunc
-				ctxWithStep, cancel = context.WithTimeout(ctxWithStep, step.Timeout)
-				defer cancel()
-			}
-			// Panic safety
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						stepErr = fmt.Errorf("panic in step '%s': %v", step.Name, r)
-					}
-				}()
-				stepErr = activity(ctxWithStep, w.State)
-			}()
-			if ctxWithStep.Err() == context.DeadlineExceeded {
-				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())
-			}
-			if errors.Is(stepErr, ErrFailWorkflowNow) {
-				return PermanentError(stepErr)
-			}
-			// Only return permanent error when we've exhausted retries or if the error is nil
-			if stepErr != nil {
-				if attempts >= maxAttempts {
-					return PermanentError(stepErr) // Mark as permanent on last attempt
-				}
-				return stepErr // Regular error for retry
-			}
-			return nil // No error
-		}
-
-		if err := Retry(operation, bo); err != nil {
-			stepErr = err
-		}
-		// After backoff.Retry, stepErr has the last error (or nil)
-
-		// --- After Step Hook ---
-		for _, hook := range w.afterStepHooks {
-			hook(ctx, w, &step, stepErr)
-		}
-
-		if stepErr != nil {
-			w.Status = StatusFailed
-			if w.store != nil {
-				_ = w.store.SaveWorkflow(ctx, w) // best effort
-			}
-			return fmt.Errorf("workflow failed: step %s failed: %w", step.Name, stepErr)
-		}
-		w.CurrentStep = i + 1
-		if w.store != nil {
-			if err := w.store.SaveWorkflow(ctx, w); err != nil {
-				return fmt.Errorf("failed to save workflow state after step %d: %v", w.CurrentStep-1, err)
-			}
-		}
-	}
-
-	w.Status = StatusCompleted
-	if w.store != nil {
-		if err := w.store.SaveWorkflow(ctx, w); err != nil {
-			return fmt.Errorf("failed to save final workflow state: %w", err)
-		}
-	}
-
-	return nil
 }
