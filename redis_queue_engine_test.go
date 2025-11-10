@@ -27,7 +27,7 @@ func checkQueueDeleted(t *testing.T, engine QueueEngine, q *redisQueue) {
 	}
 
 	// try to get the closed queue
-	_, err = qEngine.GetQueue(t.Context(), "test-queue")
+	_, err = qEngine.GetQueue(t.Context(), "testQueue")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -80,19 +80,19 @@ func TestCreateAndGetQueue(t *testing.T) {
 
 	q, err := engine.CreateQueue(
 		t.Context(),
-		"test-queue",
+		"testQueue",
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	if engine.(*redisQueueEngine).queues["test-queue"] == nil {
+	if engine.(*redisQueueEngine).queues["testQueue"] == nil {
 		t.Errorf("expected queue to be created")
 	}
 
 	// get the created queue
-	gotQueue, err := engine.GetQueue(t.Context(), "test-queue")
+	gotQueue, err := engine.GetQueue(t.Context(), "testQueue")
 	if err != nil {
 		t.Fatalf("failed to get queue: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestCloseQueue(t *testing.T) {
 
 	q, err := engine.CreateQueue(
 		t.Context(),
-		"test-queue",
+		"testQueue",
 		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 	)
 
@@ -130,7 +130,7 @@ func TestCloseQueue(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	err = engine.CloseQueue(t.Context(), "test-queue")
+	err = engine.CloseQueue(t.Context(), "testQueue")
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestCloseEngine(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		_, err := engine.CreateQueue(
 			t.Context(),
-			fmt.Sprintf("test-queue-%d", i),
+			fmt.Sprintf("testQueue%d", i),
 			QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
 		)
 		if err != nil {
@@ -172,7 +172,7 @@ func TestCloseEngine(t *testing.T) {
 	}
 
 	// try to get a queue after engine is closed
-	_, err = engine.GetQueue(t.Context(), "test-queue-0")
+	_, err = engine.GetQueue(t.Context(), "testQueue0")
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
@@ -199,7 +199,7 @@ func TestAutoDelete(t *testing.T) {
 
 		q, err := wfengine.CreateQueue(
 			t.Context(),
-			"test-queue",
+			"testQueue",
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 		)
@@ -238,7 +238,7 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			q, err := wfengine.CreateQueue(
 				t.Context(),
-				fmt.Sprintf("test-queue_%d", i),
+				fmt.Sprintf("testQueue%d", i),
 				WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 				QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 			)
@@ -279,7 +279,7 @@ func TestWorkerLoop(t *testing.T) {
 
 		queue, err := wfengine.CreateQueue(
 			t.Context(),
-			"test-worker-queue",
+			"testWorkerQueue",
 			WorkersDefinition{
 				Count:        1,
 				PollInterval: 300 * time.Millisecond,
@@ -349,7 +349,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 
 		queue, err := wfengine.CreateQueue(
 			t.Context(),
-			"test-worker-queue",
+			"testWorkerQueue",
 			WorkersDefinition{
 				Count:        3,
 				PollInterval: 300 * time.Millisecond,
@@ -429,7 +429,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		// now idleSince is initialized to time.now
 		q, err := wfengine.CreateQueue(
 			t.Context(),
-			"test-queue",
+			"testQueue",
 			WorkersDefinition{Count: 1, PollInterval: 500 * time.Millisecond},
 			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 		)
@@ -504,7 +504,7 @@ func TestStoreActions(t *testing.T) {
 			t.Fatalf("failed to create engine: %v", err)
 		}
 
-		name := "store_test_queue"
+		name := "storeTestQueue"
 		workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
 		queueOpts := QueueOptions{AutoDelete: true, PopTimeout: 1 * time.Second, DeleteAfter: 1 * time.Second}
 

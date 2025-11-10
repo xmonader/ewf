@@ -19,11 +19,15 @@ func TestEnqueueDequeue(t *testing.T) {
 		t.Fatalf("store error: %v", err)
 	}
 
-	queue := NewRedisQueue(
-		"test-queue",
+	queue, err := NewRedisQueue(
+		"testQueue",
 		QueueOptions{AutoDelete: false},
 		client,
 	)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+
 	t.Cleanup(func() {
 		if err := queue.Close(context.Background()); err != nil {
 			t.Errorf("failed to close queue: %v", err)
@@ -82,25 +86,27 @@ func TestClose(t *testing.T) {
 		Addr: "localhost:6379",
 	})
 
-	queue := NewRedisQueue(
-		"test-queue",
+	queue, err := NewRedisQueue(
+		"testQueue",
 		QueueOptions{AutoDelete: false},
 		client,
 	)
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
 
 	// enqueue an item for the queue to actually exist in redis
-	err := queue.Enqueue(t.Context(),NewWorkflow("test-wf"))
+	err = queue.Enqueue(t.Context(), NewWorkflow("test-wf"))
 	if err != nil {
 		t.Fatalf("failed to enqueue: %v", err)
 	}
 
-	
 	err = queue.Close(t.Context())
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	exists, err := queue.(*redisQueue).client.Exists(t.Context(), "test-queue").Result()
+	exists, err := queue.(*redisQueue).client.Exists(t.Context(), "testQueue").Result()
 	if err != nil {
 		t.Fatalf("failed to check queue existence: %v", err)
 	}
@@ -108,6 +114,26 @@ func TestClose(t *testing.T) {
 	// check that the queue is deleted from redis
 	if exists != 0 {
 		t.Errorf("expected queue to be deleted, but it still exists")
+	}
+
+}
+
+// TestInvalidQueueName tests passing an invalid queue name and check that queue is not created
+func TestInvalidQueueName(t *testing.T) {
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
+	q, err := NewRedisQueue(
+		"test-queue!",
+		QueueOptions{AutoDelete: false},
+		client,
+	)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if q != nil {
+		t.Error("expected queue to be nil")
 	}
 
 }

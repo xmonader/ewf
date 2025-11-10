@@ -33,11 +33,15 @@ func (e *redisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 		return nil, ErrQueueAlreadyExists
 	}
 
-	q := NewRedisQueue(
+	q, err := NewRedisQueue(
 		queueName,
 		queueOptions,
 		e.client,
 	)
+
+	if err != nil {
+		return nil, err
+	}
 
 	e.queues[queueName] = q.(*redisQueue)
 

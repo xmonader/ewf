@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 
 	"time"
 
@@ -21,14 +22,19 @@ type redisQueue struct {
 	activityCh   chan struct{} // channel used to signal activity to avoid queue auto-deletion
 }
 
-func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) Queue {
+func NewRedisQueue(queueName string, queueOptions QueueOptions, client *redis.Client) (Queue, error) {
+	alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+
+	if !alphanumeric.MatchString(queueName) {
+		return nil, fmt.Errorf("invalid queue name: %q, must be alphanumeric", queueName)
+	}
 	return &redisQueue{
 		name:         queueName,
 		queueOptions: queueOptions,
 		client:       client,
 		closeCh:      make(chan struct{}),
 		activityCh:   make(chan struct{}),
-	}
+	}, nil
 }
 
 // Name returns the name of the queue
