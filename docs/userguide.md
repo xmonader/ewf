@@ -171,7 +171,7 @@ func MyStep(ctx context.Context, state ewf.State) error {
 
 ## 8. Persistence & Recovery
 
-- EWF supports pluggable persistence (e.g., SQLite) for workflow state
+- EWF supports pluggable persistence (e.g., SQLite) for workflow state and queue metadata
 - Workflows can be resumed after process restarts or crashes
 - State is saved after each step
 
@@ -189,7 +189,8 @@ Key features:
 - Thread-safe implementation  
 - Automatic worker pool management  
 - Configurable number of workers  
-- Graceful shutdown via context cancellation  
+- Graceful shutdown via context cancellation
+- Optional persistence
 
 Example:
 ```go
@@ -198,18 +199,13 @@ Example:
 	})
 
 	queue := NewRedisQueue(
-		"queue",
-		"workflow",
-		WorkersDefinition{Count: 1, PollInterval: 200 * time.Millisecond},
+		"testQueue",
 		QueueOptions{AutoDelete: false},
 		client,
-		nil,
-		nil,
-		1*time.Second,
 	)
 	defer queue.Close(context)
 
-	workflow := NewWorkflow("workflow", nil)
+	workflow := NewWorkflow("workflow")
 	err = queue.Enqueue(context, workflow)
 	if err != nil {
 		return fmt.Errorf("failed to enqueue workflow: %v", err)
@@ -220,6 +216,40 @@ Example:
 		return fmt.Errorf("failed to dequeue workflow: %v", err)
 	}
 
+```
+
+### Queue Engine 
+The **Queue Engine** acts as a scheduler and execution manager for queued jobs, ensuring:
+* Automatic worker startup when a queue is created.
+* Graceful shutdowns respecting context cancellation.
+* Optional persistence layer integration for durable queues.
+
+Example:
+```go
+    client := redis.NewClient(
+		&redis.Options{Addr: "localhost:6379"},
+	)
+	engine := NewRedisQueueEngine(client)
+	defer func() {
+		if err := engine.Close(context); err != nil {
+			fmt.Errorf("failed to close engine: %v", err)
+		}
+	}
+
+	queue, err := engine.CreateQueue(
+		context,
+		"testQueue",
+		QueueOptions{AutoDelete: false, DeleteAfter: 10 * time.Minute},
+	)
+	if err != nil {
+		fmt.Errorf("failed to create queue: %v", err)
+	}
+
+	// get the created queue
+	gotQueue, err := engine.GetQueue(t.Context(), "testQueue")
+	if err != nil {
+		fmt.Errorf("failed to get queue: %v", err)
+	}
 ```
 
 ## 10. Testing Workflows
