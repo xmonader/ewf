@@ -25,6 +25,20 @@ type WorkersDefinition struct {
 	WorkTimeout  time.Duration `json:"work_timeout"`  // timeout for worker to process work
 }
 
+// RunOption defines options for running workflows.
+type RunOption func(*runOptions)
+
+type runOptions struct {
+	queueName string
+}
+
+// WithQueue specifies the queue name to enqueue the workflow into.
+func WithQueue(name string) RunOption {
+	return func(o *runOptions) {
+		o.queueName = name
+	}
+}
+
 type EngineOption func(*Engine)
 
 func Withstore(store Store) EngineOption {
@@ -171,8 +185,45 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 // RunAsync runs a workflow asynchronously in a new goroutine.
 // Errors are logged to standard output.
 // RunAsync runs a workflow asynchronously in a new goroutine.
-func (e *Engine) RunAsync(ctx context.Context, w *Workflow) {
+// If a queue name is provided, it enqueues the workflow instead of running it directly.
+func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
+	options := &runOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	defaultQueueOptions := QueueOptions{
+		AutoDelete:  true,
+		DeleteAfter: 1 * time.Minute,
+	}
+
+	defaultWorkersDef := WorkersDefinition{
+		Count:        1,
+		PollInterval: 1 * time.Second,
+		WorkTimeout:  5 * time.Minute}
+
 	go func() {
+		if options.queueName != "" {
+			err := e.CreateQueue(ctx, options.queueName, defaultWorkersDef, defaultQueueOptions)
+			if err != nil && err != ErrQueueAlreadyExists {
+				log.Printf("failed to create queue %s: %v", options.queueName, err)
+				return
+			}
+
+			// in case of ErrQueueAlreadyExists or queue is just created, we need to get the queue
+			queue, err := e.queueEngine.GetQueue(ctx, options.queueName)
+			if err != nil {
+				log.Printf("failed to get queue %s: %v", options.queueName, err)
+				return
+			}
+
+			// enqueue workflow
+			if err := queue.Enqueue(ctx, w); err != nil {
+				log.Printf("failed to enqueue workflow %s to queue %s: %v", w.Name, options.queueName, err)
+				return
+			}
+			return
+		}
 		if err := e.RunSync(ctx, w); err != nil {
 			// In a real application, you'd use a structured logger.
 			log.Printf("async workflow %s failed: %v", w.UUID, err)
@@ -213,14 +264,14 @@ func (e *Engine) ResumeRunningWorkflows() {
 }
 
 // CreateQueue creates a new queue and starts workers for it
-func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef WorkersDefinition, queueOptions QueueOptions) (Queue, error) {
+func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef WorkersDefinition, queueOptions QueueOptions) error {
 	if e.queueEngine == nil {
-		return nil, fmt.Errorf("no queue engine configured")
+		return fmt.Errorf("no queue engine configured")
 	}
 
 	queue, err := e.queueEngine.CreateQueue(ctx, queueName, queueOptions)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if e.Store() != nil {
@@ -231,7 +282,7 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 			QueueOptions: queueOptions,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to save queue settings: %v", err)
+			return fmt.Errorf("failed to save queue settings: %v", err)
 		}
 	}
 
@@ -241,7 +292,7 @@ func (e *Engine) CreateQueue(ctx context.Context, queueName string, workerDef Wo
 
 	e.startQueueWorkers(ctx, queue, workerDef)
 
-	return queue, nil
+	return nil
 }
 
 // CloseQueue closes a queue by its name

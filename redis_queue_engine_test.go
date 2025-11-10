@@ -13,12 +13,12 @@ import (
 )
 
 // checkQueueDeleted checks that queue is deleted from redis, queue engine map, channel is closed
-func checkQueueDeleted(t *testing.T, engine QueueEngine, q *redisQueue) {
+func checkQueueDeleted(t *testing.T, engine QueueEngine, queueName string) {
 	t.Helper()
 
 	qEngine := engine.(*redisQueueEngine)
 	// queue should now be deleted from redis
-	exists, err := qEngine.client.Exists(t.Context(), q.Name()).Result()
+	exists, err := qEngine.client.Exists(t.Context(), queueName).Result()
 	if err != nil {
 		t.Fatalf("failed to check Redis key: %v", err)
 	}
@@ -27,17 +27,12 @@ func checkQueueDeleted(t *testing.T, engine QueueEngine, q *redisQueue) {
 	}
 
 	// try to get the closed queue
-	_, err = qEngine.GetQueue(t.Context(), "testQueue")
+	q, err := qEngine.GetQueue(t.Context(), queueName)
 	if err != ErrQueueNotFound {
 		t.Errorf(" expected err to be equal %v", ErrQueueNotFound)
 	}
-
-	// check that closeCh was closed after deletion
-	select {
-	case <-q.closeCh:
-		// success
-	default:
-		t.Errorf("expected closeCh to be closed after delete")
+	if q != nil {
+		t.Errorf("expected queue to be nil after deletion")
 	}
 }
 
@@ -130,12 +125,12 @@ func TestCloseQueue(t *testing.T) {
 		t.Fatalf("failed to create queue: %v", err)
 	}
 
-	err = engine.CloseQueue(t.Context(), "testQueue")
+	err = engine.CloseQueue(t.Context(), q.Name())
 	if err != nil {
 		t.Fatalf("failed to close queue: %v", err)
 	}
 
-	checkQueueDeleted(t, engine, q.(*redisQueue))
+	checkQueueDeleted(t, engine, q.Name())
 
 	// close a non existing queue
 	err = engine.CloseQueue(t.Context(), "test")
@@ -197,9 +192,11 @@ func TestAutoDelete(t *testing.T) {
 			t.Fatalf("wf engine error: %v", err)
 		}
 
-		q, err := wfengine.CreateQueue(
+		name := "testQueue"
+
+		err = wfengine.CreateQueue(
 			t.Context(),
-			"testQueue",
+			name,
 			WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 		)
@@ -210,7 +207,7 @@ func TestAutoDelete(t *testing.T) {
 		// wait for longer than DeleteAfter duration
 		time.Sleep(5 * time.Second)
 
-		checkQueueDeleted(t, qEngine, q.(*redisQueue))
+		checkQueueDeleted(t, qEngine, name)
 	})
 }
 
@@ -234,25 +231,26 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 			t.Fatalf("wf engine error: %v", err)
 		}
 
-		var createdQueues []Queue
+		var createdQueues []string
 		for i := 0; i < 3; i++ {
-			q, err := wfengine.CreateQueue(
+			name := fmt.Sprintf("testQueue%d", i)
+			err := wfengine.CreateQueue(
 				t.Context(),
-				fmt.Sprintf("testQueue%d", i),
+				name,
 				WorkersDefinition{Count: 1, PollInterval: 1 * time.Second},
 				QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 			)
 			if err != nil {
 				t.Fatalf("failed to create queue: %v", err)
 			}
-			createdQueues = append(createdQueues, q)
+			createdQueues = append(createdQueues, name)
 		}
 
 		// wait for longer than DeleteAfter duration
 		time.Sleep(5 * time.Second)
 
 		for _, q := range createdQueues {
-			checkQueueDeleted(t, qEngine, q.(*redisQueue))
+			checkQueueDeleted(t, qEngine, q)
 		}
 	})
 }
@@ -277,9 +275,11 @@ func TestWorkerLoop(t *testing.T) {
 			t.Fatalf("wf engine error: %v", err)
 		}
 
-		queue, err := wfengine.CreateQueue(
+		name := "testWorkerQueue"
+
+		err = wfengine.CreateQueue(
 			t.Context(),
-			"testWorkerQueue",
+			name,
 			WorkersDefinition{
 				Count:        1,
 				PollInterval: 300 * time.Millisecond,
@@ -291,6 +291,11 @@ func TestWorkerLoop(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
+		}
+
+		queue, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// enqueue some workflows
@@ -323,7 +328,7 @@ func TestWorkerLoop(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, queue.(*redisQueue))
+		checkQueueDeleted(t, qEngine, queue.Name())
 	})
 }
 
@@ -347,9 +352,10 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 			t.Fatalf("wf engine error: %v", err)
 		}
 
-		queue, err := wfengine.CreateQueue(
+		name := "testWorkerQueue"
+		err = wfengine.CreateQueue(
 			t.Context(),
-			"testWorkerQueue",
+			name,
 			WorkersDefinition{
 				Count:        3,
 				PollInterval: 300 * time.Millisecond,
@@ -361,6 +367,11 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
+		}
+
+		queue, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// enqueue some workflows
@@ -393,7 +404,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, queue.(*redisQueue))
+		checkQueueDeleted(t, qEngine, queue.Name())
 	})
 }
 
@@ -426,15 +437,21 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 			t.Fatalf("wf engine error: %v", err)
 		}
 
+		name := "testQueue"
 		// now idleSince is initialized to time.now
-		q, err := wfengine.CreateQueue(
+		err = wfengine.CreateQueue(
 			t.Context(),
-			"testQueue",
+			name,
 			WorkersDefinition{Count: 1, PollInterval: 500 * time.Millisecond},
 			QueueOptions{AutoDelete: true, DeleteAfter: 2 * time.Second},
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
+		}
+
+		q, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// sleep for 1s, time since idleSince should be 1s now
@@ -464,7 +481,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 
 		time.Sleep(3 * time.Second)
 
-		checkQueueDeleted(t, qEngine, q.(*redisQueue))
+		checkQueueDeleted(t, qEngine, q.Name())
 	})
 }
 
@@ -509,9 +526,14 @@ func TestStoreActions(t *testing.T) {
 		queueOpts := QueueOptions{AutoDelete: true, PopTimeout: 1 * time.Second, DeleteAfter: 1 * time.Second}
 
 		// create queue
-		q, err := engine.CreateQueue(t.Context(), name, workersDef, queueOpts)
+		err = engine.CreateQueue(t.Context(), name, workersDef, queueOpts)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
+		}
+
+		q, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// check queue is saved to store
