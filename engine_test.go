@@ -28,14 +28,14 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Logf("Failed to close store: %v", err)
 		}
 		if err := os.Remove(dbFile); err != nil {
 			t.Logf("Failed to remove db file: %v", err)
 		}
-	}()
+	})
 	if err := store.Setup(); err != nil {
 		t.Fatalf("failed to setup store: %v", err)
 	}
@@ -44,6 +44,11 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	var step1Done, step2Done bool
 	engine.Register("step1", func(ctx context.Context, state State) error {
@@ -88,6 +93,11 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create engine2: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 	// Re-register activities after restart
 	engine2.Register("step1", func(ctx context.Context, state State) error {
 		step1Done = true
@@ -144,21 +154,25 @@ func TestEngine_DynamicTemplatePersistenceAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Fatalf("failed to close store: %v", err)
 		}
-	}()
-	defer func() {
+
 		if err := os.Remove("e2e_dyn_template.db"); err != nil && !os.IsNotExist(err) {
 			t.Fatalf("failed to remove db: %v", err)
 		}
-	}()
+	})
 
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	// Simulate dynamic creation
 	name := "deployk8s-5"
@@ -173,6 +187,11 @@ func TestEngine_DynamicTemplatePersistenceAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create engine2: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 	// Should have template loaded
 	wf, err := engine2.NewWorkflow(name)
 	if err != nil {
@@ -206,15 +225,21 @@ func TestEngine_HookInvocationCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Fatalf("failed to close store: %v", err)
 		}
-	}()
+	})
+
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	tmpl := &WorkflowTemplate{
 		Steps:               []Step{{Name: "step1"}},
@@ -286,15 +311,21 @@ func TestEngine_FailFastErrorBypassesRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Fatalf("failed to close store: %v", err)
 		}
-	}()
+	})
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
 	engine.Register("failfast", func(ctx context.Context, state State) error {
 		calls++
 		return ErrFailWorkflowNow
@@ -330,15 +361,21 @@ func TestEngine_WrappedFailFastErrorBypassesRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Fatalf("failed to close store: %v", err)
 		}
-	}()
+	})
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
 	engine.Register("failfast", func(ctx context.Context, state State) error {
 		calls++
 		return fmt.Errorf("wrapped: %w", ErrFailWorkflowNow)
@@ -374,15 +411,21 @@ func TestEngine_NormalRetryPolicyStillWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create sqlite store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Fatalf("failed to close store: %v", err)
 		}
-	}()
+	})
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
 	engine.Register("fail", func(ctx context.Context, state State) error {
 		calls++
 		return context.DeadlineExceeded
@@ -420,16 +463,21 @@ func TestEngine_StepPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Errorf("failed to close store: %v", err)
 		}
-	}()
+	})
 
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	var attempts int
 	engine.Register("PanickyStep", func(ctx context.Context, state State) error {
@@ -480,17 +528,22 @@ func TestEngine_StepTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Errorf("failed to close store: %v", err)
 		}
-	}()
+	})
 
 	// Create an engine with the store
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	// Track if the slow step was actually interrupted
 	var slowStepInterrupted bool
@@ -558,17 +611,22 @@ func TestEngine_StepTimeoutWithRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := store.Close(); err != nil {
 			t.Errorf("failed to close store: %v", err)
 		}
-	}()
+	})
 
 	// Create an engine with the store
 	engine, err := NewEngine(Withstore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
 
 	// Track retry attempts
 	var attempts int

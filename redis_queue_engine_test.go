@@ -181,16 +181,15 @@ func TestAutoDelete(t *testing.T) {
 		)
 		qEngine := NewRedisQueueEngine(client)
 
-		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close engine: %v", err)
-			}
-		})
-
 		wfengine, err := NewEngine(WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := wfengine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		name := "testQueue"
 
@@ -220,16 +219,15 @@ func TestAutoDeleteMultipleQueues(t *testing.T) {
 		)
 		qEngine := NewRedisQueueEngine(client)
 
-		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close engine: %v", err)
-			}
-		})
-
 		wfengine, err := NewEngine(WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := wfengine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		var createdQueues []string
 		for i := 0; i < 3; i++ {
@@ -264,16 +262,15 @@ func TestWorkerLoop(t *testing.T) {
 		)
 		qEngine := NewRedisQueueEngine(client)
 
-		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close queue engine: %v", err)
-			}
-		})
-
 		wfengine, err := NewEngine(WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := wfengine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		name := "testWorkerQueue"
 
@@ -338,16 +335,15 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 		)
 		qEngine := NewRedisQueueEngine(client)
 
-		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close engine: %v", err)
-			}
-		})
-
 		wfengine, err := NewEngine(WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := wfengine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		name := "testWorkerQueue"
 		err = wfengine.CreateQueue(
@@ -414,23 +410,23 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		if err != nil {
 			t.Fatalf("store error: %v", err)
 		}
-
-		qEngine := NewRedisQueueEngine(client)
-
 		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close engine: %v", err)
-			}
-
 			if err := store.Close(); err != nil {
 				t.Errorf("failed to close store: %v", err)
 			}
 		})
 
+		qEngine := NewRedisQueueEngine(client)
+
 		wfengine, err := NewEngine(WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("wf engine error: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := wfengine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		name := "testQueue"
 		// now idleSince is initialized to time.now
@@ -455,7 +451,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		workflow := NewWorkflow("test-workflow", WithStore(store))
 
 		// now time since idleSince should be reset to 0 on enqueue
-		wfengine.RunAsync(t.Context(),workflow,WithQueue(name))
+		wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
 
 		// Dequeue it immediately to simulate quick processing
 		_, err = q.Dequeue(t.Context())
@@ -501,17 +497,17 @@ func TestStoreActions(t *testing.T) {
 			&redis.Options{Addr: "localhost:6379"},
 		)
 		qEngine := NewRedisQueueEngine(client)
-		t.Cleanup(func() {
-			if err := qEngine.Close(context.Background()); err != nil {
-				t.Errorf("failed to close engine: %v", err)
-			}
-		})
 
 		// Create an engine with the store, queue engine
 		engine, err := NewEngine(Withstore(store), WithQueueEngine(qEngine))
 		if err != nil {
 			t.Fatalf("failed to create engine: %v", err)
 		}
+		t.Cleanup(func() {
+			if err := engine.Close(t.Context()); err != nil {
+				t.Fatalf("failed to close engine: %v", err)
+			}
+		})
 
 		name := "storeTestQueue"
 		workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
