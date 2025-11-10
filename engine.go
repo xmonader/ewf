@@ -195,6 +195,7 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
 	defaultQueueOptions := QueueOptions{
 		AutoDelete:  true,
 		DeleteAfter: 1 * time.Minute,
+		PopTimeout: 1*time.Second,
 	}
 
 	defaultWorkersDef := WorkersDefinition{

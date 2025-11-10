@@ -287,15 +287,11 @@ func TestWorkerLoop(t *testing.T) {
 			QueueOptions{
 				AutoDelete:  true,
 				DeleteAfter: 2 * time.Second,
+				PopTimeout:  1 * time.Second,
 			},
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
-		}
-
-		queue, err := qEngine.GetQueue(t.Context(), name)
-		if err != nil {
-			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// enqueue some workflows
@@ -307,15 +303,16 @@ func TestWorkerLoop(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
-
-			err = queue.Enqueue(t.Context(), workflow)
-			if err != nil {
-				t.Fatalf("failed to enqueue workflow: %v", err)
-			}
+			wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
 		}
 
 		// wait for processing
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
+
+		queue, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
+		}
 
 		// the queue should be empty after workers dequeue everything
 		length, err := queue.Length(t.Context())
@@ -363,15 +360,11 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 			QueueOptions{
 				AutoDelete:  true,
 				DeleteAfter: 2 * time.Second,
+				PopTimeout:  1 * time.Second,
 			},
 		)
 		if err != nil {
 			t.Fatalf("failed to create queue: %v", err)
-		}
-
-		queue, err := qEngine.GetQueue(t.Context(), name)
-		if err != nil {
-			t.Fatalf("failed to get queue: %v", err)
 		}
 
 		// enqueue some workflows
@@ -384,14 +377,16 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
 
-			err = queue.Enqueue(t.Context(), workflow)
-			if err != nil {
-				t.Fatalf("failed to enqueue workflow: %v", err)
-			}
+			wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
 		}
 
 		// wait for processing
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
+
+		queue, err := qEngine.GetQueue(t.Context(), name)
+		if err != nil {
+			t.Fatalf("failed to get queue: %v", err)
+		}
 
 		// the queue should be empty after workers dequeue everything
 		length, err := queue.Length(t.Context())
@@ -460,10 +455,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		workflow := NewWorkflow("test-workflow", WithStore(store))
 
 		// now time since idleSince should be reset to 0 on enqueue
-		err = q.Enqueue(t.Context(), workflow)
-		if err != nil {
-			t.Fatalf("failed to enqueue workflow: %v", err)
-		}
+		wfengine.RunAsync(t.Context(),workflow,WithQueue(name))
 
 		// Dequeue it immediately to simulate quick processing
 		_, err = q.Dequeue(t.Context())
