@@ -109,7 +109,7 @@ type SystemClock struct{}
 type BackOffType string
 
 const (
-	ConstantBackOffType     BackOffType = "constant"
+	ConstantBackOffType    BackOffType = "constant"
 	ExponentialBackOffType BackOffType = "exponential"
 	ZeroBackOffType        BackOffType = "zero"
 	StopBackOffType        BackOffType = "stop"
@@ -117,14 +117,14 @@ const (
 
 // BackOffData is used for serializing/deserializing BackOff implementations
 type BackOffData struct {
-	Type                BackOffType    `json:"type"`
-	Interval            time.Duration  `json:"interval,omitempty"`             // For ConstantBackOffImpl
-	InitialInterval     time.Duration  `json:"initial_interval,omitempty"`     // For ExponentialBackOffImpl
-	CurrentInterval     time.Duration  `json:"current_interval,omitempty"`     // For ExponentialBackOffImpl
-	MaxInterval         time.Duration  `json:"max_interval,omitempty"`         // For ExponentialBackOffImpl
-	Multiplier          float64        `json:"multiplier,omitempty"`          // For ExponentialBackOffImpl
-	RandomizationFactor float64        `json:"randomization_factor,omitempty"` // For ExponentialBackOffImpl with jitter
-	MaxElapsedTime      time.Duration  `json:"max_elapsed_time,omitempty"`    // For ExponentialBackOffImpl
+	Type                BackOffType   `json:"type"`
+	Interval            time.Duration `json:"interval,omitempty"`             // For ConstantBackOffImpl
+	InitialInterval     time.Duration `json:"initial_interval,omitempty"`     // For ExponentialBackOffImpl
+	CurrentInterval     time.Duration `json:"current_interval,omitempty"`     // For ExponentialBackOffImpl
+	MaxInterval         time.Duration `json:"max_interval,omitempty"`         // For ExponentialBackOffImpl
+	Multiplier          float64       `json:"multiplier,omitempty"`           // For ExponentialBackOffImpl
+	RandomizationFactor float64       `json:"randomization_factor,omitempty"` // For ExponentialBackOffImpl with jitter
+	MaxElapsedTime      time.Duration `json:"max_elapsed_time,omitempty"`     // For ExponentialBackOffImpl
 }
 
 // Now returns the current time.
@@ -227,7 +227,7 @@ func WithContext(b BackOff, ctx context.Context) BackOffContext {
 			ctx: ctx,
 		}
 	}
-	
+
 	return &withContextBackOff{
 		b:   b,
 		ctx: ctx,

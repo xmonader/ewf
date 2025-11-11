@@ -31,7 +31,7 @@ func NewApp(logger *log.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sqlite store: %v", err)
 	}
-	engine, err := ewf.NewEngine(store)
+	engine, err := ewf.NewEngine(ewf.WithStore(store))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create engine: %v", err)
 	}
@@ -110,7 +110,11 @@ func (a *App) greetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Asynchronous execution.
 	a.logger.Printf("Starting workflow %s asynchronously for name %s", wf.UUID, name)
-	a.engine.RunAsync(context.Background(), wf)
+	err = a.engine.RunAsync(context.Background(), wf)
+	if err != nil {
+		jsonError(w, fmt.Sprintf("failed to start workflow: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

@@ -45,7 +45,7 @@ func main() {
 		}
 	}()
 
-	engine, err := ewf.NewEngine(store)
+	engine, err := ewf.NewEngine(ewf.WithStore(store))
 	if err != nil {
 		log.Fatalf("Failed to create engine: %v", err)
 		return

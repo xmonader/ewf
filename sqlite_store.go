@@ -11,6 +11,8 @@ import (
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
+var _ Store = (*SQLiteStore)(nil)
+
 // SQLiteStore implements the Store interface using SQLite for persistence.
 type SQLiteStore struct {
 	db *sql.DB
@@ -47,6 +49,9 @@ func (s *SQLiteStore) Setup() error {
 	if err := s.prepTemplateTable(); err != nil {
 		return err
 	}
+	if err := s.prepQueuesTable(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -62,6 +67,20 @@ func (s *SQLiteStore) prepWorkflowTable() error {
 	_, err := s.db.Exec(q)
 	if err != nil {
 		return fmt.Errorf("failed to create workflows table: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) prepQueuesTable() error {
+	q := `
+		CREATE TABLE IF NOT EXISTS queues (
+			name TEXT NOT NULL PRIMARY KEY UNIQUE,
+			data BLOB NOT NULL
+		);
+	`
+	_, err := s.db.Exec(q)
+	if err != nil {
+		return fmt.Errorf("failed to create queues table: %w", err)
 	}
 	return nil
 }
@@ -226,4 +245,63 @@ func (s *SQLiteStore) LoadAllWorkflowTemplates(ctx context.Context) (map[string]
 		return nil, fmt.Errorf("sqlite store: failed to iterate workflow templates: %w", err)
 	}
 	return templates, nil
+}
+
+// SaveQueueMetadata saves the QueueMetadata into sqlite store
+func (s *SQLiteStore) SaveQueueMetadata(ctx context.Context, settings *QueueMetadata) error {
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue metadata: %w", err)
+	}
+
+	query := `INSERT OR REPLACE INTO queues (name, data) VALUES (?, ?)`
+	_, err = s.db.ExecContext(ctx, query, settings.Name, data)
+	if err != nil {
+		return fmt.Errorf("sqlite store: failed to save queue metadata %s: %w", settings.Name, err)
+	}
+	return nil
+}
+
+// LoadAllQueues loads all queues from the SQLite database.
+func (s *SQLiteStore) LoadAllQueueMetadata(ctx context.Context) ([]*QueueMetadata, error) {
+	query := `SELECT name, data FROM queues`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite store: failed to query queues: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
+
+	var queues []*QueueMetadata
+	for rows.Next() {
+		var name string
+		var data []byte
+		if err := rows.Scan(&name, &data); err != nil {
+			return nil, fmt.Errorf("sqlite store: failed to scan queue: %w", err)
+		}
+
+		var q QueueMetadata
+		if err := json.Unmarshal(data, &q); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal queue: %w", err)
+		}
+		queues = append(queues, &q)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite store: failed to iterate queues: %w", err)
+	}
+	return queues, nil
+}
+
+// DeleteQueueMetadata removes a queue by name from the SQLite store.
+func (s *SQLiteStore) DeleteQueueMetadata(ctx context.Context, name string) error {
+	query := `DELETE FROM queues WHERE name = ?`
+	_, err := s.db.ExecContext(ctx, query, name)
+	if err != nil {
+		return fmt.Errorf("sqlite store: failed to delete queue %s: %w", name, err)
+	}
+	return nil
 }

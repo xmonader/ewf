@@ -2,8 +2,11 @@ package ewf
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"reflect"
 	"testing"
+	"time"
 )
 
 // TestIntegration_TemplatePersistence tests template persistence via SQLiteStore.
@@ -120,6 +123,7 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 	}
 }
 
+// TestSQLiteStore_LoadNotFound tests loading a non-existent workflow in SQLiteStore.
 func TestSQLiteStore_LoadNotFound(t *testing.T) {
 	dbFile := "./test_not_found.db"
 	defer func() {
@@ -148,5 +152,123 @@ func TestSQLiteStore_LoadNotFound(t *testing.T) {
 	_, err = store.LoadWorkflowByName(context.Background(), "non-existent-name")
 	if err == nil {
 		t.Fatal("Expected an error when loading a non-existent workflow by name, but got nil")
+	}
+}
+
+// TestSQLiteStore_SaveAndLoadQueues tests saving and loading of queues in SQLiteStore.
+func TestSQLiteStore_SaveAndLoadQueues(t *testing.T) {
+	dbFile := "./test.db"
+
+	store, err := NewSQLiteStore(dbFile)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(dbFile); err != nil {
+			t.Fatalf("failed to remove dbFile: %v", err)
+		}
+
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	})
+
+	if err := store.Setup(); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	for i := 0; i < 4; i++ {
+		name := fmt.Sprintf("store_test_queue_%d", i)
+		workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
+		queueOpts := QueueOptions{AutoDelete: false, PopTimeout: 1 * time.Second}
+
+		queueMetaData := &QueueMetadata{
+			Name:         name,
+			WorkersDef:   workersDef,
+			QueueOptions: queueOpts,
+		}
+
+		err = store.SaveQueueMetadata(context.Background(), queueMetaData)
+		if err != nil {
+			t.Fatalf("Save() error = %v", err)
+		}
+	}
+
+	queues, err := store.LoadAllQueueMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("LoadAllQueueMetadata() error = %v", err)
+	}
+
+	if len(queues) != 4 {
+		t.Errorf("Expected queues len to be 4, got %d", len(queues))
+	}
+
+	for i, q := range queues {
+		expectedName := fmt.Sprintf("store_test_queue_%d", i)
+		expectedWorkersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
+		expectedQueueOpts := QueueOptions{AutoDelete: false, PopTimeout: 1 * time.Second}
+
+		if q.Name != expectedName {
+			t.Errorf("Expected queue name %s, got %s", q.Name, expectedName)
+		}
+		if !reflect.DeepEqual(q.WorkersDef, expectedWorkersDef) {
+			t.Errorf("Expected workersDef to be %v, got %v", expectedWorkersDef, q.WorkersDef)
+		}
+		if !reflect.DeepEqual(q.QueueOptions, expectedQueueOpts) {
+			t.Errorf("Expected queueOpts to be %v, got %v", expectedQueueOpts, q.QueueOptions)
+		}
+	}
+
+}
+
+// TestSQLiteStore_DeleteQueue tests deleting a queue from SQLiteStore.
+func TestSQLiteStore_DeleteQueue(t *testing.T) {
+	dbFile := "./test.db"
+
+	store, err := NewSQLiteStore(dbFile)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(dbFile); err != nil {
+			t.Fatalf("failed to remove dbFile: %v", err)
+		}
+
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	})
+
+	if err := store.Setup(); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	name := "store_test_queue"
+	workersDef := WorkersDefinition{Count: 2, PollInterval: 1 * time.Second}
+	queueOpts := QueueOptions{AutoDelete: false, PopTimeout: 1 * time.Second}
+
+	queueMetaData := &QueueMetadata{
+		Name:         name,
+		WorkersDef:   workersDef,
+		QueueOptions: queueOpts,
+	}
+
+	err = store.SaveQueueMetadata(context.Background(), queueMetaData)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	err = store.DeleteQueueMetadata(context.Background(), queueMetaData.Name)
+	if err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	queues, err := store.LoadAllQueueMetadata(context.Background())
+	if err != nil {
+		t.Fatalf("loadAll() error = %v", err)
+	}
+
+	if len(queues) != 0 {
+		t.Errorf("Expected queues len to be 0, got %d", len(queues))
 	}
 }
