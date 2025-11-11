@@ -123,6 +123,7 @@ func TestSQLiteStore_SaveAndLoad(t *testing.T) {
 	}
 }
 
+// TestSQLiteStore_LoadNotFound tests loading a non-existent workflow in SQLiteStore.
 func TestSQLiteStore_LoadNotFound(t *testing.T) {
 	dbFile := "./test_not_found.db"
 	defer func() {

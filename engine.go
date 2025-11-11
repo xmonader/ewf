@@ -43,6 +43,7 @@ func WithQueue(name string) RunOption {
 	}
 }
 
+// EngineOption defines options for creating a new Engine.
 type EngineOption func(*Engine)
 
 func WithStore(store Store) EngineOption {
@@ -111,7 +112,6 @@ func (e *Engine) Register(name string, activity StepFn) {
 // NewWorkflow creates a new workflow instance with the given name and steps.
 // The workflow is associated with the engine's store.
 // RegisterTemplate registers a workflow template with the engine.
-// RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -131,7 +131,6 @@ func (e *Engine) Store() Store {
 	return e.store
 }
 
-// NewWorkflow creates a new workflow instance from a registered definition.
 // NewWorkflow creates a new workflow instance from a registered definition.
 func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 	e.mu.RLock()
@@ -154,7 +153,6 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 // Run starts the execution of the given workflow.
 // It resolves the activity for each step from the engine's registry.
 // rehydrate applies the non-persisted fields from a workflow's definition.
-// rehydrate applies the non-persisted fields from a workflow's definition.
 func (e *Engine) rehydrate(w *Workflow) error {
 	e.mu.RLock()
 	def, ok := e.templates[w.Name]
@@ -170,7 +168,6 @@ func (e *Engine) rehydrate(w *Workflow) error {
 	return nil
 }
 
-// RunSync runs a workflow synchronously and blocks until it completes.
 // RunSync runs a workflow synchronously and blocks until it completes.
 func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 	if err := e.rehydrate(w); err != nil {
@@ -314,7 +311,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 	return nil
 }
 
-func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string) {
+func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string) error {
 	defaultQueueOptions := QueueOptions{
 		AutoDelete:  true,
 		DeleteAfter: 1 * time.Minute,
@@ -328,37 +325,36 @@ func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string
 
 	err := e.CreateQueue(ctx, queueName, defaultWorkersDef, defaultQueueOptions)
 	if err != nil && err != ErrQueueAlreadyExists {
-		log.Printf("failed to create queue %s: %v", queueName, err)
-		return
+		return fmt.Errorf("failed to create queue %s: %v", queueName, err)
 	}
 
 	// in case of ErrQueueAlreadyExists or queue is just created, we need to get the queue
 	queue, err := e.queueEngine.GetQueue(ctx, queueName)
 	if err != nil {
-		log.Printf("failed to get queue %s: %v", queueName, err)
-		return
+		return fmt.Errorf("failed to get queue %s: %v", queueName, err)
 	}
 
 	// enqueue workflow
 	if err := queue.Enqueue(ctx, w); err != nil {
-		log.Printf("failed to enqueue workflow %s to queue %s: %v", w.Name, queueName, err)
-		return
+		return fmt.Errorf("failed to enqueue workflow %s to queue %s: %v", w.Name, queueName, err)
 	}
+
+	return nil
 }
 
 // RunAsync runs a workflow asynchronously in a new goroutine.
 // Errors are logged to standard output.
 // RunAsync runs a workflow asynchronously in a new goroutine.
 // If a queue name is provided, it enqueues the workflow instead of running it directly.
-func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
+func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) error {
 	options := &runOptions{}
 	for _, opt := range opts {
 		opt(options)
 	}
-	
+
 	if options.queueName != "" {
-		e.runWithQueue(ctx, w, options.queueName)
-		return
+		err := e.runWithQueue(ctx, w, options.queueName)
+		return fmt.Errorf("failed to schedule the workflow: %v", err)
 	}
 
 	go func() {
@@ -367,10 +363,10 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
 			log.Printf("async workflow %s failed: %v", w.UUID, err)
 		}
 	}()
+
+	return nil
 }
 
-// ResumeRunningWorkflows finds all workflows with a 'running' status in the store
-// and resumes their execution in the background.
 // ResumeRunningWorkflows finds all workflows with a 'running' status in the store and resumes their execution in the background.
 func (e *Engine) ResumeRunningWorkflows() {
 	go func() {
@@ -396,7 +392,10 @@ func (e *Engine) ResumeRunningWorkflows() {
 				continue
 			}
 			log.Printf("Resuming workflow %s", wf.UUID)
-			e.RunAsync(ctx, wf)
+			err = e.RunAsync(ctx, wf)
+			if err != nil {
+				log.Printf("failed to resume workflow %s: %v", wf.UUID, err)
+			}
 		}
 	}()
 }

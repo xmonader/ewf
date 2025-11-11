@@ -118,7 +118,7 @@ func TestClose(t *testing.T) {
 
 }
 
-// TestQueueName tests passing an different queue names and check for errors
+// TestQueueName tests passing different queue names and check for errors
 func TestQueueName(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",

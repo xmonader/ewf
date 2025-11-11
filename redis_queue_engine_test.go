@@ -300,7 +300,10 @@ func TestWorkerLoop(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
-			wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+			err = wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+			if err != nil {
+				t.Fatalf("failed to run workflow async: %v", err)
+			}
 		}
 
 		// wait for processing
@@ -373,7 +376,10 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
 
-			wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+			err = wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+			if err != nil {
+				t.Fatalf("failed to run workflow async: %v", err)
+			}
 		}
 
 		// wait for processing
@@ -399,6 +405,7 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 	})
 }
 
+// TestEnqueueIdleTimeReset tests that enqueueing a workflow resets the idle time of the queue, preventing auto-deletion
 func TestEnqueueIdleTimeReset(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 
@@ -451,7 +458,10 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		workflow := NewWorkflow("test-workflow")
 
 		// now time since idleSince should be reset to 0 on enqueue
-		wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+		err = wfengine.RunAsync(t.Context(), workflow, WithQueue(name))
+		if err != nil {
+			t.Fatalf("failed to enqueue workflow: %v", err)
+		}
 
 		// Dequeue it immediately to simulate quick processing
 		_, err = q.Dequeue(t.Context())
