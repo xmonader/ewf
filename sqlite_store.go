@@ -295,6 +295,7 @@ func (s *SQLiteStore) LoadAllQueueMetadata(ctx context.Context) ([]*QueueMetadat
 	}
 	return queues, nil
 }
+
 // DeleteQueueMetadata removes a queue by name from the SQLite store.
 func (s *SQLiteStore) DeleteQueueMetadata(ctx context.Context, name string) error {
 	query := `DELETE FROM queues WHERE name = ?`
