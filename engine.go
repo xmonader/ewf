@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
+	"sync"
 	"time"
 )
 
@@ -16,6 +18,7 @@ type Engine struct {
 	activities  map[string]StepFn
 	templates   map[string]*WorkflowTemplate
 	store       Store
+	mu          sync.RWMutex
 	queueEngine QueueEngine
 }
 
@@ -72,9 +75,7 @@ func NewEngine(opts ...EngineOption) (*Engine, error) {
 
 		templates, err := engine.store.LoadAllWorkflowTemplates(context.Background())
 		if err == nil {
-			for name, tmpl := range templates {
-				engine.templates[name] = tmpl
-			}
+			maps.Copy(engine.templates, templates)
 		}
 	}
 
@@ -102,6 +103,8 @@ func NewEngine(opts ...EngineOption) (*Engine, error) {
 // This allows the activity to be used in workflow steps by its name.
 // Register registers an activity function with the engine.
 func (e *Engine) Register(name string, activity StepFn) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.activities[name] = activity
 }
 
@@ -110,6 +113,8 @@ func (e *Engine) Register(name string, activity StepFn) {
 // RegisterTemplate registers a workflow template with the engine.
 // RegisterTemplate registers a workflow template with the engine.
 func (e *Engine) RegisterTemplate(name string, def *WorkflowTemplate) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.templates[name] = def
 	if e.store != nil {
 		_ = e.store.SaveWorkflowTemplate(context.Background(), name, def)
@@ -129,7 +134,9 @@ func (e *Engine) Store() Store {
 // NewWorkflow creates a new workflow instance from a registered definition.
 // NewWorkflow creates a new workflow instance from a registered definition.
 func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
+	e.mu.RLock()
 	def, ok := e.templates[name]
+	e.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("workflow template '%s' not registered", name)
 	}
@@ -149,7 +156,9 @@ func (e *Engine) NewWorkflow(name string) (*Workflow, error) {
 // rehydrate applies the non-persisted fields from a workflow's definition.
 // rehydrate applies the non-persisted fields from a workflow's definition.
 func (e *Engine) rehydrate(w *Workflow) error {
+	e.mu.RLock()
 	def, ok := e.templates[w.Name]
+	e.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("workflow template '%s' not registered", w.Name)
 	}
@@ -179,10 +188,21 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 		hook(ctx, w)
 	}
 
-	return e.run(ctx, w)
+	stepFns := make(map[string]StepFn)
+	e.mu.RLock()
+	for _, step := range w.Steps {
+		activity, ok := e.activities[step.Name]
+		if !ok {
+			return fmt.Errorf("activity '%s' not registered", step.Name)
+		}
+		stepFns[step.Name] = activity
+	}
+	e.mu.RUnlock()
+
+	return e.run(ctx, stepFns, w)
 }
 
-func (e *Engine) run(ctx context.Context, w *Workflow) error {
+func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow) (err error) {
 	if w.Status == StatusCompleted {
 		return nil // Already completed
 	}
@@ -205,7 +225,7 @@ func (e *Engine) run(ctx context.Context, w *Workflow) error {
 
 		var attempts uint = 0
 		var stepErr error
-		activity, ok := e.activities[step.Name]
+		stepFn, ok := stepFns[step.Name]
 		if !ok {
 			return fmt.Errorf("activity '%s' not registered", step.Name)
 		}
@@ -241,7 +261,7 @@ func (e *Engine) run(ctx context.Context, w *Workflow) error {
 						stepErr = fmt.Errorf("panic in step '%s': %v", step.Name, r)
 					}
 				}()
-				stepErr = activity(ctxWithStep, w.State)
+				stepErr = stepFn(ctxWithStep, w.State)
 			}()
 			if ctxWithStep.Err() == context.DeadlineExceeded {
 				stepErr = fmt.Errorf("step '%s' timed out after %v: %w", step.Name, step.Timeout, ctxWithStep.Err())

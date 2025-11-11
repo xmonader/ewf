@@ -228,6 +228,23 @@ curl -v http://localhost:8090/greet/EWF
 curl http://localhost:8090/status/<workflow-id>
 ```
 
+## Complex Struct State Example
+
+The `structexample` demonstrates how to store and retrieve complex, nested structs in workflow state with type safety. **Important Note**: The workflow state uses `map[string]any`, so when retrieving structs, you must use type assertions (e.g., `person, ok := state["person"].(Person)`). This provides runtime type safety but requires careful type handling to avoid panics.
+
+Key points:
+* Store structs directly in state: `state["key"] = myStruct`
+* Retrieve with type assertion: `myStruct, ok := state["key"].(MyStructType)`
+* Always check the `ok` boolean to handle type assertion failures gracefully
+* Nested structs work seamlessly with this approach
+
+To run the example:
+
+```sh
+cd examples/structexample
+go run main.go
+```
+
 ## Running Tests
 
 To run the test suite for the library:
