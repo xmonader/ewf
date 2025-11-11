@@ -314,16 +314,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 	return nil
 }
 
-// RunAsync runs a workflow asynchronously in a new goroutine.
-// Errors are logged to standard output.
-// RunAsync runs a workflow asynchronously in a new goroutine.
-// If a queue name is provided, it enqueues the workflow instead of running it directly.
-func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
-	options := &runOptions{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
+func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string) {
 	defaultQueueOptions := QueueOptions{
 		AutoDelete:  true,
 		DeleteAfter: 1 * time.Minute,
@@ -335,28 +326,42 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
 		PollInterval: 1 * time.Second,
 		WorkTimeout:  5 * time.Minute}
 
+	err := e.CreateQueue(ctx, queueName, defaultWorkersDef, defaultQueueOptions)
+	if err != nil && err != ErrQueueAlreadyExists {
+		log.Printf("failed to create queue %s: %v", queueName, err)
+		return
+	}
+
+	// in case of ErrQueueAlreadyExists or queue is just created, we need to get the queue
+	queue, err := e.queueEngine.GetQueue(ctx, queueName)
+	if err != nil {
+		log.Printf("failed to get queue %s: %v", queueName, err)
+		return
+	}
+
+	// enqueue workflow
+	if err := queue.Enqueue(ctx, w); err != nil {
+		log.Printf("failed to enqueue workflow %s to queue %s: %v", w.Name, queueName, err)
+		return
+	}
+}
+
+// RunAsync runs a workflow asynchronously in a new goroutine.
+// Errors are logged to standard output.
+// RunAsync runs a workflow asynchronously in a new goroutine.
+// If a queue name is provided, it enqueues the workflow instead of running it directly.
+func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) {
+	options := &runOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	
+	if options.queueName != "" {
+		e.runWithQueue(ctx, w, options.queueName)
+		return
+	}
+
 	go func() {
-		if options.queueName != "" {
-			err := e.CreateQueue(ctx, options.queueName, defaultWorkersDef, defaultQueueOptions)
-			if err != nil && err != ErrQueueAlreadyExists {
-				log.Printf("failed to create queue %s: %v", options.queueName, err)
-				return
-			}
-
-			// in case of ErrQueueAlreadyExists or queue is just created, we need to get the queue
-			queue, err := e.queueEngine.GetQueue(ctx, options.queueName)
-			if err != nil {
-				log.Printf("failed to get queue %s: %v", options.queueName, err)
-				return
-			}
-
-			// enqueue workflow
-			if err := queue.Enqueue(ctx, w); err != nil {
-				log.Printf("failed to enqueue workflow %s to queue %s: %v", w.Name, options.queueName, err)
-				return
-			}
-			return
-		}
 		if err := e.RunSync(ctx, w); err != nil {
 			// In a real application, you'd use a structured logger.
 			log.Printf("async workflow %s failed: %v", w.UUID, err)
