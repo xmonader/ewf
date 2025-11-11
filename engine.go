@@ -353,8 +353,10 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 	}
 
 	if options.queueName != "" {
-		err := e.runWithQueue(ctx, w, options.queueName)
-		return fmt.Errorf("failed to schedule the workflow: %v", err)
+		if err := e.runWithQueue(ctx, w, options.queueName); err != nil {
+			return fmt.Errorf("failed to schedule the workflow: %v", err)
+		}
+		return nil
 	}
 
 	go func() {
