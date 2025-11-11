@@ -110,7 +110,11 @@ func (a *App) greetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Asynchronous execution.
 	a.logger.Printf("Starting workflow %s asynchronously for name %s", wf.UUID, name)
-	a.engine.RunAsync(context.Background(), wf)
+	err = a.engine.RunAsync(context.Background(), wf)
+	if err != nil {
+		jsonError(w, fmt.Sprintf("failed to start workflow: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
