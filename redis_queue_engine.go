@@ -29,7 +29,14 @@ func (e *redisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if _, ok := e.queues[queueName]; ok {
+	if q, ok := e.queues[queueName]; ok {
+		
+		// signal queue activity, avoid blocking on full channel
+		select {
+		case q.activityCh <- struct{}{}:
+		default:
+		}
+
 		return nil, ErrQueueAlreadyExists
 	}
 
