@@ -58,6 +58,12 @@ func (e *redisQueueEngine) GetQueue(ctx context.Context, queueName string) (Queu
 		return nil, ErrQueueNotFound
 	}
 
+	// signal queue activity, avoid blocking on full channel
+	select {
+	case q.activityCh <- struct{}{}:
+	default:
+	}
+
 	return q, nil
 }
 
