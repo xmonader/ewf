@@ -319,9 +319,9 @@ func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string
 	}
 
 	defaultWorkersDef := WorkersDefinition{
-		Count:        1,
+		Count:        10,
 		PollInterval: 1 * time.Second,
-		WorkTimeout:  5 * time.Minute}
+		WorkTimeout:  10 * time.Minute}
 
 	err := e.CreateQueue(ctx, queueName, defaultWorkersDef, defaultQueueOptions)
 	if err != nil && err != ErrQueueAlreadyExists {
