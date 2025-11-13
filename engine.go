@@ -353,10 +353,11 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 	if options.queueName != "" {
 		w.Queued = true
 	}
-
-	err := e.store.SaveWorkflow(ctx, w)
-	if err != nil {
-		return fmt.Errorf("failed to save workflow: %v", err)
+	if e.store != nil {
+		err := e.store.SaveWorkflow(ctx, w)
+		if err != nil {
+			return fmt.Errorf("failed to save workflow: %v", err)
+		}
 	}
 
 	if options.queueName != "" {
