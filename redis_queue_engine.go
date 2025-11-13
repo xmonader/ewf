@@ -30,7 +30,7 @@ func (e *redisQueueEngine) CreateQueue(ctx context.Context, queueName string, qu
 	defer e.mu.Unlock()
 
 	if q, ok := e.queues[queueName]; ok {
-		
+
 		// signal queue activity, avoid blocking on full channel
 		select {
 		case q.activityCh <- struct{}{}:

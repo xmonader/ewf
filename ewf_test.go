@@ -480,3 +480,67 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 		t.Errorf("expected still 1 API call, got %d", apiCalls)
 	}
 }
+
+// TestEngine_WithLogger tests that the engine properly uses a provided logger.
+//
+// Scenario:
+// 1. Creates an engine with an in-memory store and a mock logger.
+// 2. Registers a failing step to trigger error logging.
+// 3. Runs a workflow with the failing step.
+// 4. Verifies the mock logger captured the error log entry.
+//
+// This test ensures the engine correctly uses the provided logger.
+func TestEngine_WithLogger(t *testing.T) {
+	// Create a test store
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	}()
+
+	// Create a mock logger to capture log calls
+	mockLogger := &MockLogger{}
+
+	// Create an engine with the store
+	engine, err := NewEngine(WithStore(store), WithLogger(mockLogger))
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+
+	// Verify logger was set
+	if engine.logger == nil {
+		t.Fatal("logger was not set on engine")
+	}
+
+	// Register a failing step to trigger error logging
+	engine.Register("failStep", func(ctx context.Context, state State) error {
+		return fmt.Errorf("test error")
+	})
+
+	engine.RegisterTemplate("test-workflow", &WorkflowTemplate{
+		Steps: []Step{{Name: "failStep"}},
+	})
+
+	wf, err := engine.NewWorkflow("test-workflow")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	// Run async to trigger logger usage
+	err = engine.RunAsync(context.Background(), wf)
+	if err != nil {
+		t.Fatalf("failed to run workflow: %v", err)
+	}
+
+	// Give it time to complete
+	time.Sleep(200 * time.Millisecond)
+
+	if !mockLogger.ErrorCalled {
+		t.Error("expected error log to be called for failed workflow")
+	}
+
+}
