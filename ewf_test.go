@@ -482,14 +482,14 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 }
 
 // TestEngine_WithLogger tests that the engine properly uses a provided logger.
-// 
+//
 // Scenario:
 // 1. Creates an engine with an in-memory store and a mock logger.
 // 2. Registers a failing step to trigger error logging.
 // 3. Runs a workflow with the failing step.
 // 4. Verifies the mock logger captured the error log entry.
 //
-// This test ensures the engine correctly uses the provided logger.	
+// This test ensures the engine correctly uses the provided logger.
 func TestEngine_WithLogger(t *testing.T) {
 	// Create a test store
 	store, err := NewSQLiteStore(":memory:")
@@ -506,7 +506,7 @@ func TestEngine_WithLogger(t *testing.T) {
 	mockLogger := &MockLogger{}
 
 	// Create an engine with the store
-	engine, err := NewEngine(store, WithLogger(mockLogger))
+	engine, err := NewEngine(WithStore(store), WithLogger(mockLogger))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -531,7 +531,10 @@ func TestEngine_WithLogger(t *testing.T) {
 	}
 
 	// Run async to trigger logger usage
-	engine.RunAsync(context.Background(), wf)
+	err = engine.RunAsync(context.Background(), wf)
+	if err != nil {
+		t.Fatalf("failed to run workflow: %v", err)
+	}
 
 	// Give it time to complete
 	time.Sleep(200 * time.Millisecond)
