@@ -152,6 +152,7 @@ type Workflow struct {
 	CurrentStep int            `json:"current_step"`
 	CreatedAt   time.Time      `json:"created_at"`
 	Steps       []Step         `json:"steps"`
+	Queued      bool           `json:"queued"`
 
 	// non persisted fields
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`

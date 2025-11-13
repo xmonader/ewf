@@ -60,9 +60,8 @@ func (a *App) Close() error {
 
 // Run starts the application.
 func (a *App) Run() error {
-	// Resume any pending workflows in the background.
-	a.engine.ResumeRunningWorkflows()
-
+	// Resume pending and running workflows in the background.
+	a.engine.ResumeWorkflows()
 	a.logger.Println("Starting server on :8090")
 	return http.ListenAndServe(":8090", a.router)
 }

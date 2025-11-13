@@ -350,8 +350,17 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 	for _, opt := range opts {
 		opt(options)
 	}
+	if options.queueName != "" {
+		w.Queued = true
+	}
+
+	err := e.store.SaveWorkflow(ctx, w)
+	if err != nil {
+		return fmt.Errorf("failed to save workflow: %v", err)
+	}
 
 	if options.queueName != "" {
+		w.Queued = true
 		if err := e.runWithQueue(ctx, w, options.queueName); err != nil {
 			return fmt.Errorf("failed to schedule the workflow: %v", err)
 		}
@@ -368,35 +377,43 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 	return nil
 }
 
-// ResumeRunningWorkflows finds all workflows with a 'running' status in the store and resumes their execution in the background.
-func (e *Engine) ResumeRunningWorkflows() {
+// ResumeWorkflows resumes all workflows in the background. It resumes running workflows and pending workflows.
+func (e *Engine) ResumeWorkflows() {
 	go func() {
-		// Create a new context for the background resumption process.
 		ctx := context.Background()
-
-		uuids, err := e.Store().ListWorkflowUUIDsByStatus(ctx, StatusRunning)
+		runningWorkflows, err := e.getRunningWorkflows(ctx)
 		if err != nil {
-			log.Printf("error listing workflows for resumption: %v", err)
+			log.Printf("error listing running workflows: %v", err)
 			return
 		}
 
-		if len(uuids) == 0 {
-			log.Println("No pending workflows to resume.")
+		pendingWorkflows, err := e.getPendingWorkflows(ctx)
+		if err != nil {
+			log.Printf("error listing pending workflows: %v", err)
 			return
 		}
+		workflows := append(runningWorkflows, pendingWorkflows...)
+		if len(workflows) == 0 {
+			log.Println("No workflows to resume.")
+			return
+		}
+		log.Printf("Resuming %d workflows in the background...", len(workflows))
 
-		log.Printf("Resuming %d pending workflows in the background...", len(uuids))
-		for _, id := range uuids {
+		for _, id := range workflows {
 			wf, err := e.Store().LoadWorkflowByUUID(ctx, id)
 			if err != nil {
 				log.Printf("failed to load workflow %s for resumption: %v", id, err)
 				continue
 			}
-			log.Printf("Resuming workflow %s", wf.UUID)
-			err = e.RunAsync(ctx, wf)
-			if err != nil {
-				log.Printf("failed to resume workflow %s: %v", wf.UUID, err)
+			if wf.Status == StatusPending && wf.Queued {
+				continue
 			}
+			log.Printf("Resuming workflow %s", wf.UUID)
+			go func() {
+				if err := e.RunSync(ctx, wf); err != nil {
+					log.Printf("failed to resume workflow %s: %v", wf.UUID, err)
+				}
+			}()
 		}
 	}()
 }
@@ -553,4 +570,20 @@ func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions Qu
 			}
 		}
 	}()
+}
+
+func (e *Engine) getRunningWorkflows(ctx context.Context) ([]string, error) {
+	uuids, err := e.Store().ListWorkflowUUIDsByStatus(ctx, StatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("error listing workflows for resumption: %v", err)
+	}
+	return uuids, nil
+}
+
+func (e *Engine) getPendingWorkflows(ctx context.Context) ([]string, error) {
+	uuids, err := e.Store().ListWorkflowUUIDsByStatus(ctx, StatusPending)
+	if err != nil {
+		return nil, fmt.Errorf("error listing workflows for resumption: %v", err)
+	}
+	return uuids, nil
 }
