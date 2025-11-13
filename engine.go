@@ -22,6 +22,16 @@ type Engine struct {
 	queueEngine QueueEngine
 }
 
+var defaultQueueOptions = QueueOptions{
+	AutoDelete:  true,
+	DeleteAfter: 10 * time.Minute,
+	PopTimeout:  1 * time.Second}
+
+var defaultWorkersDef = WorkersDefinition{
+	Count:        10,
+	PollInterval: 1 * time.Second,
+	WorkTimeout:  5 * time.Minute}
+
 // WorkersDefinition defines the worker pool for processing workflows in the queue
 type WorkersDefinition struct {
 	Count        int           `json:"worker_count"`  // number of workers
@@ -312,17 +322,6 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 }
 
 func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string) error {
-	defaultQueueOptions := QueueOptions{
-		AutoDelete:  true,
-		DeleteAfter: 1 * time.Minute,
-		PopTimeout:  1 * time.Second,
-	}
-
-	defaultWorkersDef := WorkersDefinition{
-		Count:        1,
-		PollInterval: 1 * time.Second,
-		WorkTimeout:  5 * time.Minute}
-
 	err := e.CreateQueue(ctx, queueName, defaultWorkersDef, defaultQueueOptions)
 	if err != nil && err != ErrQueueAlreadyExists {
 		return fmt.Errorf("failed to create queue %s: %v", queueName, err)
