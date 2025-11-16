@@ -682,3 +682,293 @@ func TestEngine_StepTimeoutWithRetry(t *testing.T) {
 		t.Fatalf("expected 2 retry attempts, got %d", attempts)
 	}
 }
+
+// TestEngine_ResumeWorkflows_ResumesRunningWorkflows tests that ResumeWorkflows resumes workflows with running status.
+//
+// Scenario:
+// 1. Creates a store and engine.
+// 2. Registers a template and activity.
+// 3. Creates a workflow and manually sets it to running status with partial progress.
+// 4. Saves the workflow to the store.
+// 5. Creates a new engine instance (simulating restart).
+// 6. Calls ResumeWorkflows.
+// 7. Waits for workflow completion.
+// 8. Verifies the workflow completed successfully.
+func TestEngine_ResumeWorkflows_ResumesRunningWorkflows(t *testing.T) {
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
+	var step2Done bool
+	engine.Register("step1", func(ctx context.Context, state State) error {
+		return nil
+	})
+	engine.Register("step2", func(ctx context.Context, state State) error {
+		step2Done = true
+		return nil
+	})
+
+	engine.RegisterTemplate("resume-test", &WorkflowTemplate{
+		Steps: []Step{{Name: "step1"}, {Name: "step2"}},
+	})
+
+	// Create workflow and manually set to running with partial progress
+	wf, err := engine.NewWorkflow("resume-test")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+	wf.Status = StatusRunning
+	wf.CurrentStep = 1 // Completed step1, need to run step2
+
+	if err := store.SaveWorkflow(context.Background(), wf); err != nil {
+		t.Fatalf("failed to save workflow: %v", err)
+	}
+
+	// Create new engine instance (simulating restart)
+	engine2, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine2: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine2.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine2: %v", err)
+		}
+	})
+
+	engine2.Register("step1", func(ctx context.Context, state State) error {
+		return nil
+	})
+	engine2.Register("step2", func(ctx context.Context, state State) error {
+		step2Done = true
+		return nil
+	})
+
+	// Reset flag
+	step2Done = false
+
+	// Resume workflows
+	engine2.ResumeWorkflows()
+
+	// Wait for workflow to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify workflow completed
+	if !step2Done {
+		t.Errorf("expected step2 to be executed after resume")
+	}
+
+	// Verify workflow status is completed
+	wf2, err := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow: %v", err)
+	}
+	if wf2.Status != StatusCompleted {
+		t.Errorf("expected workflow status to be completed, got %s", wf2.Status)
+	}
+}
+
+// TestEngine_ResumeWorkflows_ResumesPendingNonQueued tests that ResumeWorkflows resumes pending workflows that are not queued.
+//
+// Scenario:
+// 1. Creates a store and engine.
+// 2. Registers a template and activity.
+// 3. Creates a pending workflow without a queue name.
+// 4. Saves the workflow to the store.
+// 5. Creates a new engine instance (simulating restart).
+// 6. Calls ResumeWorkflows.
+// 7. Waits for workflow completion.
+// 8. Verifies the workflow completed successfully.
+func TestEngine_ResumeWorkflows_ResumesPendingNonQueued(t *testing.T) {
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
+	var stepExecuted bool
+	engine.Register("step1", func(ctx context.Context, state State) error {
+		stepExecuted = true
+		return nil
+	})
+
+	engine.RegisterTemplate("pending-test", &WorkflowTemplate{
+		Steps: []Step{{Name: "step1"}},
+	})
+
+	// Create pending workflow without queue name
+	wf, err := engine.NewWorkflow("pending-test")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+	wf.Status = StatusPending
+	wf.QueueName = "" // Not queued
+
+	if err := store.SaveWorkflow(context.Background(), wf); err != nil {
+		t.Fatalf("failed to save workflow: %v", err)
+	}
+
+	// Create new engine instance (simulating restart)
+	engine2, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine2: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine2.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine2: %v", err)
+		}
+	})
+
+	engine2.Register("step1", func(ctx context.Context, state State) error {
+		stepExecuted = true
+		return nil
+	})
+
+	// Reset flag
+	stepExecuted = false
+
+	// Resume workflows
+	engine2.ResumeWorkflows()
+
+	// Wait for workflow to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify workflow completed
+	if !stepExecuted {
+		t.Errorf("expected step1 to be executed after resume")
+	}
+
+	// Verify workflow status is completed
+	wf2, err := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow: %v", err)
+	}
+	if wf2.Status != StatusCompleted {
+		t.Errorf("expected workflow status to be completed, got %s", wf2.Status)
+	}
+}
+
+// TestEngine_ResumeWorkflows_SkipsPendingQueued tests that ResumeWorkflows skips pending workflows that are queued.
+//
+// Scenario:
+// 1. Creates a store and engine.
+// 2. Registers a template and activity.
+// 3. Creates a pending workflow with a queue name.
+// 4. Saves the workflow to the store.
+// 5. Creates a new engine instance (simulating restart).
+// 6. Calls ResumeWorkflows.
+// 7. Verifies the workflow was not resumed (remains pending).
+func TestEngine_ResumeWorkflows_SkipsPendingQueued(t *testing.T) {
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine: %v", err)
+		}
+	})
+
+	var stepExecuted bool
+	engine.Register("step1", func(ctx context.Context, state State) error {
+		stepExecuted = true
+		return nil
+	})
+
+	engine.RegisterTemplate("queued-test", &WorkflowTemplate{
+		Steps: []Step{{Name: "step1"}},
+	})
+
+	// Create pending workflow with queue name
+	wf, err := engine.NewWorkflow("queued-test")
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+	wf.Status = StatusPending
+	wf.QueueName = "test-queue" // Queued
+
+	if err := store.SaveWorkflow(context.Background(), wf); err != nil {
+		t.Fatalf("failed to save workflow: %v", err)
+	}
+
+	// Create new engine instance (simulating restart)
+	engine2, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine2: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := engine2.Close(context.Background()); err != nil {
+			t.Fatalf("failed to close engine2: %v", err)
+		}
+	})
+
+	engine2.Register("step1", func(ctx context.Context, state State) error {
+		stepExecuted = true
+		return nil
+	})
+
+	// Reset flag
+	stepExecuted = false
+
+	// Resume workflows
+	engine2.ResumeWorkflows()
+
+	// Wait a bit to ensure workflow is not processed
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify workflow was NOT executed (should be skipped)
+	if stepExecuted {
+		t.Errorf("expected step1 NOT to be executed for queued workflow")
+	}
+
+	// Verify workflow status remains pending
+	wf2, err := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow: %v", err)
+	}
+	if wf2.Status != StatusPending {
+		t.Errorf("expected workflow status to remain pending, got %s", wf2.Status)
+	}
+	if wf2.QueueName != "test-queue" {
+		t.Errorf("expected queue name to be preserved, got %s", wf2.QueueName)
+	}
+}

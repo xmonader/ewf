@@ -131,6 +131,7 @@ type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 type Store interface {
 	Setup() error // could be a no-op, no problem.
 	SaveWorkflow(ctx context.Context, workflow *Workflow) error
+	DeleteWorkflow(ctx context.Context, uuid string) error
 	LoadWorkflowByName(ctx context.Context, name string) (*Workflow, error)
 	LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error)
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
@@ -152,7 +153,7 @@ type Workflow struct {
 	CurrentStep int            `json:"current_step"`
 	CreatedAt   time.Time      `json:"created_at"`
 	Steps       []Step         `json:"steps"`
-	Queued      bool           `json:"queued"`
+	QueueName   string         `json:"queue_name"`
 
 	// non persisted fields
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`

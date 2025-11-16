@@ -338,13 +338,6 @@ func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string
 		return fmt.Errorf("failed to enqueue workflow %s to queue %s: %v", w.Name, queueName, err)
 	}
 
-	w.Queued = true
-	if e.store != nil {
-		if err := e.store.SaveWorkflow(ctx, w); err != nil {
-			return fmt.Errorf("failed to save workflow state after enqueuing: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -358,19 +351,24 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 		opt(options)
 	}
 
+	w.QueueName = options.queueName
+	if e.store != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
+			return fmt.Errorf("failed to save workflow: %v", err)
+		}
+	}
+
 	if options.queueName != "" {
 		if err := e.runWithQueue(ctx, w, options.queueName); err != nil {
+			err := e.store.DeleteWorkflow(ctx, w.UUID)
+			if err != nil {
+				return fmt.Errorf("failed to delete workflow: %v", err)
+			}
 			return fmt.Errorf("failed to schedule the workflow: %v", err)
 		}
 		return nil
 	}
 
-	if e.store != nil {
-		err := e.store.SaveWorkflow(ctx, w)
-		if err != nil {
-			return fmt.Errorf("failed to save workflow: %v", err)
-		}
-	}
 	go func() {
 		if err := e.RunSync(ctx, w); err != nil {
 			// In a real application, you'd use a structured logger.
@@ -409,7 +407,8 @@ func (e *Engine) ResumeWorkflows() {
 				log.Printf("failed to load workflow %s for resumption: %v", id, err)
 				continue
 			}
-			if wf.Status == StatusPending && wf.Queued {
+			if wf.Status == StatusPending && wf.QueueName != "" {
+				log.Printf("Workflow %s is pending and has a queue name, skipping resumption", wf.UUID)
 				continue
 			}
 			log.Printf("Resuming workflow %s", wf.UUID)
