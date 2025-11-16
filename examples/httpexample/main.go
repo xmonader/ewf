@@ -60,9 +60,8 @@ func (a *App) Close() error {
 
 // Run starts the application.
 func (a *App) Run() error {
-	// Resume any pending workflows in the background.
-	a.engine.ResumeRunningWorkflows()
-
+	// Resume pending and running workflows in the background.
+	a.engine.ResumeWorkflows()
 	a.logger.Println("Starting server on :8090")
 	return http.ListenAndServe(":8090", a.router)
 }
@@ -110,7 +109,7 @@ func (a *App) greetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Asynchronous execution.
 	a.logger.Printf("Starting workflow %s asynchronously for name %s", wf.UUID, name)
-	err = a.engine.RunAsync(context.Background(), wf)
+	err = a.engine.Run(context.Background(), wf, ewf.WithAsync())
 	if err != nil {
 		jsonError(w, fmt.Sprintf("failed to start workflow: %v", err), http.StatusInternalServerError)
 		return

@@ -100,6 +100,15 @@ func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) erro
 	return nil
 }
 
+func (s *SQLiteStore) DeleteWorkflow(ctx context.Context, uuid string) error {
+	query := `DELETE FROM workflows WHERE uuid = ?`
+	_, err := s.db.ExecContext(ctx, query, uuid)
+	if err != nil {
+		return fmt.Errorf("sqlite store: failed to delete workflow %s: %w", uuid, err)
+	}
+	return nil
+}
+
 // ErrWorkflowNotFound is returned when a workflow is not found in the database.
 var ErrWorkflowNotFound = errors.New("workflow not found")
 

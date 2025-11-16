@@ -47,7 +47,7 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 
 	if err == nil {
 		t.Errorf("expected error but err is nil")
@@ -169,7 +169,7 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -230,7 +230,7 @@ func TestWorkflow_Run_Retry_Failure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 
 	if err == nil {
 		t.Errorf("expected error but err is nil")
@@ -350,7 +350,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 	}
 
 	// Run the workflow
-	if err := engine.RunSync(context.Background(), wf); err != nil {
+	if err := engine.Run(context.Background(), wf); err != nil {
 		t.Fatalf("failed to run workflow: %v", err)
 	}
 
@@ -367,7 +367,7 @@ func TestSimpleIdempotencyPattern(t *testing.T) {
 	wf.CurrentStep = 0
 
 	// Run the workflow again
-	if err := engine.RunSync(context.Background(), wf); err != nil {
+	if err := engine.Run(context.Background(), wf); err != nil {
 		t.Fatalf("failed to run workflow again: %v", err)
 	}
 
@@ -456,7 +456,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 	}
 
 	// Run the workflow - it should fail
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err == nil {
 		t.Fatalf("expected an error, got nil")
 	}
@@ -471,7 +471,7 @@ func TestCrashRecoveryWithIdempotency(t *testing.T) {
 	wf.CurrentStep = 0
 
 	// Run the workflow again
-	if err := engine.RunSync(context.Background(), wf); err != nil {
+	if err := engine.Run(context.Background(), wf); err != nil {
 		t.Fatalf("failed to run workflow again: %v", err)
 	}
 
