@@ -200,6 +200,7 @@ func (e *Engine) RunSync(ctx context.Context, w *Workflow) (err error) {
 	for _, step := range w.Steps {
 		activity, ok := e.activities[step.Name]
 		if !ok {
+			e.mu.RUnlock()
 			return fmt.Errorf("activity '%s' not registered", step.Name)
 		}
 		stepFns[step.Name] = activity
