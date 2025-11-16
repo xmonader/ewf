@@ -130,10 +130,10 @@ type AfterStepHook func(ctx context.Context, w *Workflow, step *Step, err error)
 // Store defines the interface for workflow persistence.
 type Store interface {
 	Setup() error // could be a no-op, no problem.
-	SaveWorkflow(ctx context.Context, workflow *Workflow) error
+	SaveWorkflow(ctx context.Context, workflow Workflow) error
 	DeleteWorkflow(ctx context.Context, uuid string) error
-	LoadWorkflowByName(ctx context.Context, name string) (*Workflow, error)
-	LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error)
+	LoadWorkflowByName(ctx context.Context, name string) (Workflow, error)
+	LoadWorkflowByUUID(ctx context.Context, uuid string) (Workflow, error)
 	ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error)
 	SaveWorkflowTemplate(ctx context.Context, name string, tmpl *WorkflowTemplate) error
 	LoadWorkflowTemplate(ctx context.Context, name string) (*WorkflowTemplate, error)
@@ -172,7 +172,7 @@ type WorkflowTemplate struct {
 }
 
 // WorkflowOption defines options for creating a new Workflow.
-type WorkflowOption func(*Workflow)
+type WorkflowOption func(w *Workflow)
 
 // WithQueue specifies the queue name to enqueue the workflow into.
 func WithQueue(queueName string) WorkflowOption {
@@ -182,8 +182,8 @@ func WithQueue(queueName string) WorkflowOption {
 }
 
 // NewWorkflow creates a new workflow instance with the given name and options.
-func NewWorkflow(name string, opts ...WorkflowOption) *Workflow {
-	w := &Workflow{
+func NewWorkflow(name string, opts ...WorkflowOption) Workflow {
+	w := Workflow{
 		UUID:      uuid.New().String(),
 		Name:      name,
 		Status:    StatusPending,
@@ -192,7 +192,7 @@ func NewWorkflow(name string, opts ...WorkflowOption) *Workflow {
 		CreatedAt: time.Now(),
 	}
 	for _, opt := range opts {
-		opt(w)
+		opt(&w)
 	}
 	return w
 }
