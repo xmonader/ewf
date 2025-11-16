@@ -125,7 +125,7 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	defer cancel()
 
 	// This should timeout before completion, simulating an interruption
-	_ = engine.RunSync(ctx, wf)
+	_ = engine.Run(ctx, wf)
 
 	// Verify some attempts were made but not all
 	currentAttempts, ok := wf.State["attempts"].(int)
@@ -168,7 +168,7 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	})
 
 	// Resume the workflow
-	if err := engine2.RunSync(context.Background(), &recoveredWf); err != nil {
+	if err := engine2.Run(context.Background(), &recoveredWf); err != nil {
 		t.Fatalf("Failed to resume workflow: %v", err)
 	}
 

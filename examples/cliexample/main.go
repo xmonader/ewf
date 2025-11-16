@@ -76,7 +76,7 @@ func main() {
 			log.Fatalf("Failed to create workflow: %v", err)
 		}
 
-		if err := engine.RunSync(ctx, wf); err != nil {
+		if err := engine.Run(ctx, wf); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
 		}
 		log.Println("workflow completed successfully!")
@@ -95,7 +95,7 @@ func main() {
 			log.Println("Workflow was already completed. Nothing to do, delete the DB file.")
 			continue
 		}
-		if err := engine.RunSync(ctx, wf); err != nil {
+		if err := engine.Run(ctx, wf); err != nil {
 			log.Fatalf("Workflow failed: %v", err)
 		}
 		log.Println("workflow completed successfully!")

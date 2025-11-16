@@ -119,7 +119,7 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	}
 
 	// Resume workflow from rehydrated state
-	if err := engine2.RunSync(context.Background(), wf2); err != nil {
+	if err := engine2.Run(context.Background(), wf2); err != nil {
 		t.Errorf("unexpected error running rehydrated workflow: %v", err)
 	}
 	if !step2Done {
@@ -258,8 +258,8 @@ func TestEngine_HookInvocationCounts(t *testing.T) {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
 
-	if err := engine.RunSync(context.Background(), wf); err != nil {
-		t.Fatalf("RunSync failed: %v", err)
+	if err := engine.Run(context.Background(), wf); err != nil {
+		t.Fatalf("Run failed: %v", err)
 	}
 	if beforeWorkflowCalls != 1 {
 		t.Errorf("beforeWorkflow hook called %d times, expected 1", beforeWorkflowCalls)
@@ -279,8 +279,8 @@ func TestEngine_HookInvocationCounts(t *testing.T) {
 	wf.CurrentStep = 0
 
 	// Run again: counters should increment by 1 each
-	if err := engine.RunSync(context.Background(), wf); err != nil {
-		t.Fatalf("RunSync (second) failed: %v", err)
+	if err := engine.Run(context.Background(), wf); err != nil {
+		t.Fatalf("Run (second) failed: %v", err)
 	}
 	if beforeWorkflowCalls != 2 {
 		t.Errorf("beforeWorkflow hook called %d times after second run, expected 2", beforeWorkflowCalls)
@@ -337,7 +337,7 @@ func TestEngine_FailFastErrorBypassesRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err == nil || !strings.Contains(err.Error(), ErrFailWorkflowNow.Error()) {
 		t.Fatalf("expected workflow to fail with ErrFailWorkflowNow, got: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestEngine_WrappedFailFastErrorBypassesRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err == nil || !strings.Contains(err.Error(), "wrapped: fail workflow now") {
 		t.Fatalf("expected workflow to fail with wrapped ErrFailWorkflowNow, got: %v", err)
 	}
@@ -440,7 +440,7 @@ func TestEngine_NormalRetryPolicyStillWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err == nil {
 		t.Fatal("expected workflow to fail, got nil")
 	}
@@ -501,7 +501,7 @@ func TestEngine_StepPanic(t *testing.T) {
 		t.Fatalf("failed to create workflow: %v", err)
 	}
 
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 	if err == nil {
 		t.Fatalf("expected workflow to fail due to panic, but it succeeded")
 	}
@@ -580,7 +580,7 @@ func TestEngine_StepTimeout(t *testing.T) {
 	}
 
 	// Run the workflow - it should fail with timeout
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 
 	// Verify the workflow failed due to timeout
 	if err == nil {
@@ -666,7 +666,7 @@ func TestEngine_StepTimeoutWithRetry(t *testing.T) {
 	}
 
 	// Run the workflow - it should fail after all retries
-	err = engine.RunSync(context.Background(), wf)
+	err = engine.Run(context.Background(), wf)
 
 	// Verify the workflow failed due to timeout after retries
 	if err == nil {

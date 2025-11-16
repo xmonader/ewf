@@ -171,9 +171,19 @@ type WorkflowTemplate struct {
 	AfterStepHooks      []AfterStepHook
 }
 
+// WorkflowOption defines options for creating a new Workflow.
+type WorkflowOption func(*Workflow)
+
+// WithQueue specifies the queue name to enqueue the workflow into.
+func WithQueue(queueName string) WorkflowOption {
+	return func(w *Workflow) {
+		w.QueueName = queueName
+	}
+}
+
 // NewWorkflow creates a new workflow instance with the given name and options.
-func NewWorkflow(name string) *Workflow {
-	return &Workflow{
+func NewWorkflow(name string, opts ...WorkflowOption) *Workflow {
+	w := &Workflow{
 		UUID:      uuid.New().String(),
 		Name:      name,
 		Status:    StatusPending,
@@ -181,4 +191,8 @@ func NewWorkflow(name string) *Workflow {
 		State:     make(State),
 		CreatedAt: time.Now(),
 	}
+	for _, opt := range opts {
+		opt(w)
+	}
+	return w
 }
