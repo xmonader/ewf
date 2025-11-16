@@ -173,7 +173,7 @@ This example shows the usage of the `Queue Engine`:
  if err != nil {
   log.Fatalf("failed to create workflow: %v", err)
  }
- wfengine.Run(context, workflow, WithAsync())
+ wfengine.Run(context, workflow)
 ```
 
 ## Retry Policy & Backoff Examples

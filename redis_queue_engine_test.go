@@ -300,9 +300,9 @@ func TestWorkerLoop(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
-			err = wfengine.Run(t.Context(), workflow, WithAsync())
+			err = wfengine.Run(t.Context(), workflow)
 			if err != nil {
-				t.Fatalf("failed to run workflow async: %v", err)
+				t.Fatalf("failed to enqueue workflow async: %v", err)
 			}
 		}
 
@@ -375,9 +375,9 @@ func TestWorkerLoopMultiWorkers(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create workflow: %v", err)
 			}
-			err = wfengine.Run(t.Context(), workflow, WithAsync())
+			err = wfengine.Run(t.Context(), workflow)
 			if err != nil {
-				t.Fatalf("failed to run workflow async: %v", err)
+				t.Fatalf("failed to enqueue workflow async: %v", err)
 			}
 		}
 
@@ -457,7 +457,7 @@ func TestEnqueueIdleTimeReset(t *testing.T) {
 		workflow := NewWorkflow("test-workflow", WithQueue(name))
 
 		// now time since idleSince should be reset to 0 on enqueue
-		err = wfengine.Run(t.Context(), workflow, WithAsync())
+		err = wfengine.Run(t.Context(), workflow)
 		if err != nil {
 			t.Fatalf("failed to enqueue workflow: %v", err)
 		}
