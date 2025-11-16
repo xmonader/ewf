@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // Engine is the central component for managing and executing workflows.
@@ -18,6 +20,7 @@ type Engine struct {
 	activities  map[string]StepFn
 	templates   map[string]*WorkflowTemplate
 	store       Store
+	logger      Logger
 	mu          sync.RWMutex
 	queueEngine QueueEngine
 }
@@ -53,9 +56,15 @@ func WithQueue(name string) RunOption {
 	}
 }
 
-// EngineOption defines options for creating a new Engine.
+// EngineOption is a functional option for configuring an Engine.
 type EngineOption func(*Engine)
 
+// WithLogger sets the logger for the engine.
+func WithLogger(logger Logger) EngineOption {
+	return func(e *Engine) {
+		e.logger = logger
+	}
+}
 func WithStore(store Store) EngineOption {
 	return func(e *Engine) {
 		e.store = store
@@ -69,10 +78,12 @@ func WithQueueEngine(queueEngine QueueEngine) EngineOption {
 }
 
 // NewEngine creates a new workflow engine.
+// NewEngine creates a new workflow engine.
 func NewEngine(opts ...EngineOption) (*Engine, error) {
 	engine := &Engine{
 		activities: make(map[string]StepFn),
 		templates:  make(map[string]*WorkflowTemplate),
+		logger:     NewZerologAdapter(zerolog.New(os.Stdout).With().Timestamp().Logger()),
 	}
 
 	for _, opt := range opts {
@@ -98,7 +109,7 @@ func NewEngine(opts ...EngineOption) (*Engine, error) {
 			for _, qm := range queues {
 				q, err := engine.queueEngine.CreateQueue(ctx, qm.Name, qm.QueueOptions)
 				if err != nil {
-					log.Printf("failed to recreate queue %s: %v", qm.Name, err)
+					engine.logger.Error().Err(err).Str("queue_name", qm.Name).Msg("failed to recreate queue")
 					continue
 				}
 
@@ -361,8 +372,7 @@ func (e *Engine) RunAsync(ctx context.Context, w *Workflow, opts ...RunOption) e
 
 	go func() {
 		if err := e.RunSync(ctx, w); err != nil {
-			// In a real application, you'd use a structured logger.
-			log.Printf("async workflow %s failed: %v", w.UUID, err)
+			e.logger.Error().Err(err).Str("workflow_uuid", w.UUID).Msg("async workflow failed")
 		}
 	}()
 
@@ -377,26 +387,27 @@ func (e *Engine) ResumeRunningWorkflows() {
 
 		uuids, err := e.Store().ListWorkflowUUIDsByStatus(ctx, StatusRunning)
 		if err != nil {
-			log.Printf("error listing workflows for resumption: %v", err)
+			e.logger.Error().Err(err).Msg("error listing workflows for resumption")
 			return
+
 		}
 
 		if len(uuids) == 0 {
-			log.Println("No pending workflows to resume.")
+			e.logger.Info().Msg("No pending workflows to resume")
 			return
 		}
 
-		log.Printf("Resuming %d pending workflows in the background...", len(uuids))
+		e.logger.Info().Int("count", len(uuids)).Msg("Resuming pending workflows in the background")
 		for _, id := range uuids {
 			wf, err := e.Store().LoadWorkflowByUUID(ctx, id)
 			if err != nil {
-				log.Printf("failed to load workflow %s for resumption: %v", id, err)
+				e.logger.Error().Err(err).Str("workflow_uuid", id).Msg("failed to load workflow for resumption")
 				continue
 			}
-			log.Printf("Resuming workflow %s", wf.UUID)
+			e.logger.Info().Str("workflow_uuid", wf.UUID).Msg("Resuming workflow")
 			err = e.RunAsync(ctx, wf)
 			if err != nil {
-				log.Printf("failed to resume workflow %s: %v", wf.UUID, err)
+				e.logger.Error().Err(err).Str("workflow_uuid", wf.UUID).Msg("failed to resume workflow")
 			}
 		}
 	}()
@@ -487,7 +498,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 				case <-ticker.C:
 					wf, err := q.Dequeue(ctx)
 					if err != nil {
-						log.Printf("Worker %d: error dequeuing workflow: %v\n", workerID, err)
+						e.logger.Error().Err(err).Int("worker_id", workerID).Msg("error dequeuing workflow")
 						continue
 					}
 
@@ -502,7 +513,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 					}
 
 					if err := e.RunSync(workCtx, wf); err != nil {
-						log.Printf("Worker %d: error processing workflow %s: %v\n", workerID, wf.Name, err)
+						e.logger.Error().Err(err).Int("worker_id", workerID).Str("workflow_name", wf.Name).Msg("error processing workflow")
 					}
 					cancel()
 				}
@@ -536,17 +547,17 @@ func (e *Engine) monitorAutoDelete(ctx context.Context, q Queue, queueOptions Qu
 
 				length, err := q.Length(ctx)
 				if err != nil {
-					log.Printf("failed to check queue length: %v", err)
+					e.logger.Error().Err(err).Str("queue_name", q.Name()).Msg("failed to check queue length")
 					continue
 				}
 
 				if length == 0 {
 					if err := e.queueEngine.CloseQueue(ctx, q.Name()); err != nil {
-						log.Printf("error deleting queue: %v", err)
+						e.logger.Error().Err(err).Str("queue_name", q.Name()).Msg("error deleting queue")
 
 					} else {
 						if err := e.deleteFromStore(ctx, q.Name()); err != nil {
-							log.Printf("error deleting queue: %s from store\n", q.Name())
+							e.logger.Error().Err(err).Str("queue_name", q.Name()).Msg("error deleting queue from store")
 						}
 					}
 					return
