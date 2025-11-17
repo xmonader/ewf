@@ -86,7 +86,8 @@ func (s *SQLiteStore) prepQueuesTable() error {
 }
 
 // SaveWorkflow saves the given workflow to the SQLite database.
-func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow *Workflow) error {
+// Receives a copy to prevent sharing issues.
+func (s *SQLiteStore) SaveWorkflow(ctx context.Context, workflow Workflow) error {
 	data, err := json.Marshal(workflow)
 	if err != nil {
 		return fmt.Errorf("failed to marshal workflow: %w", err)
@@ -112,43 +113,43 @@ func (s *SQLiteStore) DeleteWorkflow(ctx context.Context, uuid string) error {
 // ErrWorkflowNotFound is returned when a workflow is not found in the database.
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
-func (s *SQLiteStore) LoadWorkflowByUUID(ctx context.Context, uuid string) (*Workflow, error) {
+func (s *SQLiteStore) LoadWorkflowByUUID(ctx context.Context, uuid string) (Workflow, error) {
+	var workflow Workflow
 	var data []byte
 	q := `SELECT data FROM workflows WHERE uuid = ?`
 	err := s.db.QueryRowContext(ctx, q, uuid).Scan(&data)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, ErrWorkflowNotFound
+			return workflow, ErrWorkflowNotFound
 		}
-		return nil, fmt.Errorf("sqlite store: failed to load workflow by UUID %s: %w", uuid, err)
+		return workflow, fmt.Errorf("sqlite store: failed to load workflow by UUID %s: %w", uuid, err)
 	}
 
-	var workflow Workflow
 	err = json.Unmarshal(data, &workflow)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+		return workflow, fmt.Errorf("failed to unmarshal workflow: %w", err)
 	}
-	return &workflow, nil
+	return workflow, nil
 }
 
-func (s *SQLiteStore) LoadWorkflowByName(ctx context.Context, name string) (*Workflow, error) {
+func (s *SQLiteStore) LoadWorkflowByName(ctx context.Context, name string) (Workflow, error) {
+	var workflow Workflow
 	var data []byte
 	// Use the dedicated name column instead of JSON extraction
 	q := `SELECT data FROM workflows WHERE name = ?`
 	err := s.db.QueryRowContext(ctx, q, name).Scan(&data)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, ErrWorkflowNotFound
+			return workflow, ErrWorkflowNotFound
 		}
-		return nil, fmt.Errorf("sqlite store: failed to load workflow by name %s: %w", name, err)
+		return workflow, fmt.Errorf("sqlite store: failed to load workflow by name %s: %w", name, err)
 	}
 
-	var workflow Workflow
 	err = json.Unmarshal(data, &workflow)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+		return workflow, fmt.Errorf("failed to unmarshal workflow: %w", err)
 	}
-	return &workflow, nil
+	return workflow, nil
 }
 
 func (s *SQLiteStore) ListWorkflowUUIDsByStatus(ctx context.Context, status WorkflowStatus) ([]string, error) {

@@ -51,8 +51,11 @@ func StepB(ctx context.Context, state ewf.State) error {
     return nil
 }
 
+// Configure persistence and engine
+store, _ := ewf.NewSQLiteStore("workflow.db")
+engine, _ := ewf.NewEngine(ewf.WithStore(store))
+
 // Register steps and workflow
-engine := ewf.NewEngine(store)
 engine.Register("StepA", StepA)
 engine.Register("StepB", StepB)
 
@@ -67,6 +70,11 @@ engine.RegisterTemplate("my_workflow", tmpl)
 // Run a workflow
 wf, _ := engine.NewWorkflow("my_workflow")
 _ = engine.Run(context.Background(), wf)
+
+// Workflows are persisted after every step. To inspect the most recent
+// state (status, current step, outputs, etc.), reload it from the store.
+wfFromStore, _ := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+fmt.Println("Current step:", wfFromStore.CurrentStep)
 ```
 
 ---
@@ -186,6 +194,9 @@ func MyStep(ctx context.Context, state ewf.State) error {
 - EWF supports pluggable persistence (e.g., SQLite) for workflow state and queue metadata
 - Workflows can be resumed after process restarts or crashes
 - State is saved after each step
+- `Engine.Run` accepts workflow values to avoid sharing mutable state. Always reload workflows
+  from the configured store (or use `Store()` directly) when you need the latest status, step index,
+  or outputs.
 
 ---
 
@@ -242,13 +253,20 @@ Example:
 
 ```go
 t := testing.T{}
-engine := ewf.NewEngine(ewf.NewInMemoryStore())
+store := ewf.NewInMemoryStore()
+engine := ewf.NewEngine(ewf.WithStore(store))
 // ...register steps and templates...
 wf, _ := engine.NewWorkflow("my_workflow")
 err := engine.Run(context.Background(), wf)
 if err != nil {
     t.Fatalf("workflow failed: %v", err)
 }
+
+latest, err := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+if err != nil {
+    t.Fatalf("failed to load workflow: %v", err)
+}
+t.Logf("Workflow finished at step %d", latest.CurrentStep)
 ```
 
 ---

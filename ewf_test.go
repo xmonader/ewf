@@ -17,7 +17,17 @@ import (
 //
 // This test ensures basic workflow execution, step registration, and state propagation work as expected.
 func TestWorkflow_Run_Simple(t *testing.T) {
-	engine, err := NewEngine()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -58,13 +68,17 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 		t.Errorf("step2 not executed")
 	}
 
-	if wf.CurrentStep != 2 {
-		t.Errorf("expected currentStep to be 2, got %d", wf.CurrentStep)
+	storedWf, err := engine.Store().LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow from store: %v", err)
 	}
-	if _, ok := wf.State["step1output"]; !ok {
+	if storedWf.CurrentStep != 2 {
+		t.Errorf("expected currentStep to be 2, got %d", storedWf.CurrentStep)
+	}
+	if _, ok := storedWf.State["step1output"]; !ok {
 		t.Errorf("step1 output not found")
 	}
-	if _, ok := wf.State["step2output"]; !ok {
+	if _, ok := storedWf.State["step2output"]; !ok {
 		t.Errorf("step2 output not found")
 	}
 }
@@ -133,7 +147,17 @@ func TestWorkflow_Run_Fail(t *testing.T) {
 //
 // This test ensures the retry policy works correctly for transient failures.
 func TestWorkflow_Run_Retry(t *testing.T) {
-	engine, err := NewEngine()
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
 	if err != nil {
 		t.Fatalf("failed to create engine: %v", err)
 	}
@@ -181,15 +205,27 @@ func TestWorkflow_Run_Retry(t *testing.T) {
 		t.Errorf("step2 not executed")
 	}
 
-	if wf.CurrentStep != 2 {
-		t.Errorf("expected currentStep to be 2, got %d", wf.CurrentStep)
+	storedWf, err := engine.Store().LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow from store: %v", err)
+	}
+	if storedWf.CurrentStep != 2 {
+		t.Errorf("expected currentStep to be 2, got %d", storedWf.CurrentStep)
 	}
 
-	if _, ok := wf.State["step2output"]; !ok {
+	if _, ok := storedWf.State["step2output"]; !ok {
 		t.Errorf("step2 output not found")
 	}
-	if wf.State["final_attempts"] != 3 {
-		t.Errorf("expected final_attempts to be 3, got %d", wf.State["final_attempts"])
+	rawAttempts, ok := storedWf.State["final_attempts"]
+	if !ok {
+		t.Fatalf("final_attempts not found in workflow state")
+	}
+	attempts, ok := rawAttempts.(float64)
+	if !ok {
+		t.Fatalf("final_attempts has unexpected type %T", rawAttempts)
+	}
+	if int(attempts) != 3 {
+		t.Errorf("expected final_attempts to be 3, got %v", attempts)
 	}
 }
 

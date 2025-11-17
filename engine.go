@@ -142,12 +142,12 @@ func (e *Engine) Store() Store {
 }
 
 // NewWorkflow creates a new workflow instance from a registered definition.
-func (e *Engine) NewWorkflow(name string, opts ...WorkflowOption) (*Workflow, error) {
+func (e *Engine) NewWorkflow(name string, opts ...WorkflowOption) (Workflow, error) {
 	e.mu.RLock()
 	def, ok := e.templates[name]
 	e.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("workflow template '%s' not registered", name)
+		return Workflow{}, fmt.Errorf("workflow template '%s' not registered", name)
 	}
 
 	w := NewWorkflow(name, opts...)
@@ -179,20 +179,20 @@ func (e *Engine) rehydrate(w *Workflow) error {
 }
 
 // runSync executes a workflow synchronously
-func (e *Engine) runSync(ctx context.Context, w *Workflow) (err error) {
-	if err := e.rehydrate(w); err != nil {
+func (e *Engine) runSync(ctx context.Context, w Workflow) (err error) {
+	if err := e.rehydrate(&w); err != nil {
 		return err
 	}
 	// register all after workflow hooks
 	defer func() {
 		for _, hook := range w.afterWorkflowHooks {
-			hook(ctx, w, err)
+			hook(ctx, &w, err)
 		}
 	}()
 
 	// execute all before workflow hooks
 	for _, hook := range w.beforeWorkflowHooks {
-		hook(ctx, w)
+		hook(ctx, &w)
 	}
 
 	stepFns := make(map[string]StepFn)
@@ -210,7 +210,7 @@ func (e *Engine) runSync(ctx context.Context, w *Workflow) (err error) {
 	return e.run(ctx, stepFns, w)
 }
 
-func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow) (err error) {
+func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w Workflow) (err error) {
 	if w.Status == StatusCompleted {
 		return nil // Already completed
 	}
@@ -228,7 +228,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 		step := w.Steps[i]
 
 		for _, stepHook := range w.beforeStepHooks {
-			stepHook(ctx, w, &step)
+			stepHook(ctx, &w, &step)
 		}
 
 		var attempts uint = 0
@@ -294,7 +294,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 
 		// --- After Step Hook ---
 		for _, hook := range w.afterStepHooks {
-			hook(ctx, w, &step, stepErr)
+			hook(ctx, &w, &step, stepErr)
 		}
 
 		if stepErr != nil {
@@ -322,7 +322,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w *Workflow
 	return nil
 }
 
-func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string) error {
+func (e *Engine) runWithQueue(ctx context.Context, w Workflow, queueName string) error {
 	err := e.CreateQueue(ctx, queueName, defaultWorkersDef, defaultQueueOptions)
 	if err != nil && err != ErrQueueAlreadyExists {
 		return fmt.Errorf("failed to create queue %s: %v", queueName, err)
@@ -345,7 +345,8 @@ func (e *Engine) runWithQueue(ctx context.Context, w *Workflow, queueName string
 // Run executes a workflow. By default, it runs synchronously and blocks until completion.
 // Use WithAsync() option to run asynchronously in a goroutine.
 // If the workflow has a queue name set, it will be enqueued instead of executed directly.
-func (e *Engine) Run(ctx context.Context, w *Workflow, opts ...RunOption) error {
+// Accepts a copy (value) to prevent sharing issues.
+func (e *Engine) Run(ctx context.Context, w Workflow, opts ...RunOption) error {
 	options := &runOptions{}
 	for _, opt := range opts {
 		opt(options)
@@ -516,7 +517,7 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 						continue
 					}
 
-					if wf == nil {
+					if wf.UUID == "" {
 						continue
 					}
 
