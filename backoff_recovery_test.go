@@ -168,7 +168,7 @@ func TestWorkflowBackoffRecovery(t *testing.T) {
 	})
 
 	// Resume the workflow
-	if err := engine2.Run(context.Background(), &recoveredWf); err != nil {
+	if err := engine2.Run(context.Background(), recoveredWf); err != nil {
 		t.Fatalf("Failed to resume workflow: %v", err)
 	}
 

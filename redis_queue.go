@@ -62,8 +62,8 @@ func (q *redisQueue) ActivityCh() <-chan struct{} {
 }
 
 // Enqueue adds a workflow to the queue
-func (q *redisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
-
+func (q *redisQueue) Enqueue(ctx context.Context, workflow Workflow) error {
+	// Receives a copy to prevent sharing issues
 	data, err := json.Marshal(workflow)
 	if err != nil {
 		return fmt.Errorf("failed to marshal workflow %w", err)
@@ -83,8 +83,10 @@ func (q *redisQueue) Enqueue(ctx context.Context, workflow *Workflow) error {
 	return nil
 }
 
-// Dequeue retrieves and removes a workflow from the queue
-func (q *redisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
+// Dequeue retrieves and removes a workflow from the queue.
+// Returns a copy to prevent sharing issues.
+func (q *redisQueue) Dequeue(ctx context.Context) (Workflow, error) {
+	var workflow Workflow
 
 	// default timeout to 1 second if not set
 	timeout := q.queueOptions.PopTimeout
@@ -95,11 +97,12 @@ func (q *redisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	res, err := q.client.BRPop(ctx, timeout, q.name).Result()
 
 	if err == redis.Nil {
-		return nil, nil
+		// Return zero value to indicate no workflow available
+		return workflow, nil
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("dequeue error %w", err)
+		return workflow, fmt.Errorf("dequeue error %w", err)
 	}
 
 	// signal queue activity, avoid blocking on full channel
@@ -109,15 +112,14 @@ func (q *redisQueue) Dequeue(ctx context.Context) (*Workflow, error) {
 	}
 
 	if len(res) < 2 {
-		return nil, fmt.Errorf("dequeue error: result length should be at least 2")
+		return workflow, fmt.Errorf("dequeue error: result length should be at least 2")
 	}
 
-	var wf Workflow
-	if err := json.Unmarshal([]byte(res[1]), &wf); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow %w", err)
+	if err := json.Unmarshal([]byte(res[1]), &workflow); err != nil {
+		return workflow, fmt.Errorf("failed to unmarshal workflow %w", err)
 	}
 
-	return &wf, nil
+	return workflow, nil
 }
 
 func (q *redisQueue) deleteQueue(ctx context.Context) error {

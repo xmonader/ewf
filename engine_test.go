@@ -126,13 +126,17 @@ func TestEngine_Rehydration_FromStore(t *testing.T) {
 	if !step2Done {
 		t.Errorf("step2 not executed after rehydration")
 	}
-	if wf2.CurrentStep != 2 {
-		t.Errorf("expected currentStep to be 2 after completion, got %d", wf2.CurrentStep)
+	finalWf, err := engine2.Store().LoadWorkflowByUUID(context.Background(), wf2.UUID)
+	if err != nil {
+		t.Fatalf("failed to reload workflow after completion: %v", err)
 	}
-	if _, ok := wf2.State["step1output"]; !ok {
+	if finalWf.CurrentStep != 2 {
+		t.Errorf("expected currentStep to be 2 after completion, got %d", finalWf.CurrentStep)
+	}
+	if _, ok := finalWf.State["step1output"]; !ok {
 		t.Errorf("rehydrated workflow missing step1 output")
 	}
-	if _, ok := wf2.State["step2output"]; !ok {
+	if _, ok := finalWf.State["step2output"]; !ok {
 		t.Errorf("rehydrated workflow missing step2 output")
 	}
 }

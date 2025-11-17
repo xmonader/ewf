@@ -86,8 +86,8 @@ func main() {
  }
  defer store.Close()
 
- // 2. Create a new engine.
- engine, err := ewf.NewEngine(store)
+// 2. Create a new engine.
+engine, err := ewf.NewEngine(ewf.WithStore(store))
  if err != nil {
   log.Fatalf("engine error: %v", err)
  }
@@ -123,13 +123,18 @@ func main() {
   log.Fatalf("failed to create workflow: %v", err)
  }
 
- // 6. Run the workflow synchronously.
- log.Println("Starting workflow...")
- if err := engine.Run(context.Background(), wf); err != nil {
-  log.Fatalf("Workflow failed: %v", err)
- }
+// 6. Run the workflow synchronously.
+log.Println("Starting workflow...")
+if err := engine.Run(context.Background(), wf); err != nil {
+ log.Fatalf("Workflow failed: %v", err)
+}
 
- log.Println("Workflow completed successfully!")
+// Reload from the store to inspect the most recent workflow state.
+latest, err := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
+if err != nil {
+ log.Fatalf("failed to load workflow: %v", err)
+}
+log.Printf("Workflow completed successfully at step %d!\n", latest.CurrentStep)
 }
 ```
 
