@@ -196,7 +196,7 @@ EWF includes a lightweight, embeddable **queue system** designed for asynchronou
 ### Queue
 
 The **Queue** is a concurrent-safe structure that allows you to enqueue and process jobs (like workflow runs or background tasks).  
-Each queue automatically starts its worker loop upon creation.
+Each queue automatically starts its worker loop upon creation. Providing an interface to open up all queue implementation choices.
 
 Key features:
 
@@ -206,36 +206,9 @@ Key features:
 - Graceful shutdown via context cancellation
 - Optional persistence
 
-Example:
-
-```go
-    client := redis.NewClient(&redis.Options{
-  Addr: "localhost:6379",
- })
-
- queue := NewRedisQueue(
-  "testQueue",
-  QueueOptions{AutoDelete: false},
-  client,
- )
- defer queue.Close(context)
-
- workflow := NewWorkflow("workflow")
- err = queue.Enqueue(context, workflow)
- if err != nil {
-  return fmt.Errorf("failed to enqueue workflow: %v", err)
- }
-
- wf, err := queue.Dequeue(context)
- if err != nil {
-  return fmt.Errorf("failed to dequeue workflow: %v", err)
- }
-
-```
-
 ### Queue Engine
 
-The **Queue Engine** acts as a scheduler and execution manager for queued jobs, ensuring:
+The **Queue Engine** acts as a scheduler and execution manager for queued jobs, providing an interface to open up all queue engine implementation choices. ensuring:
 
 - Automatic worker startup when a queue is created.
 - Graceful shutdowns respecting context cancellation.
@@ -244,16 +217,7 @@ The **Queue Engine** acts as a scheduler and execution manager for queued jobs, 
 Example:
 
 ```go
-    client := redis.NewClient(
-  &redis.Options{Addr: "localhost:6379"},
- )
- engine := NewRedisQueueEngine(client)
- defer func() {
-  if err := engine.Close(context); err != nil {
-   fmt.Errorf("failed to close engine: %v", err)
-  }
- }
-
+// first, implement the queue, queue engine interfaces
  queue, err := engine.CreateQueue(
   context,
   "testQueue",

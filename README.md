@@ -15,25 +15,25 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 
 ## Feature Matrix
 
-| Feature                      | Supported | Notes                                                                                  |
-| ---------------------------- | :-------: | -------------------------------------------------------------------------------------- |
-| Step Retry Policies          |    ✅     | Per-step, with customizable attempts and flexible backoff (constant, exponential, etc) |
-| Step Timeouts                |    ✅     | Per-step, context-based cancellation                                                   |
-| Idempotency Helpers/Patterns |    ✅     | Ergonomic, context-based, with docs/examples                                           |
-| Before/After Workflow Hooks  |    ✅     | For setup, teardown, logging, etc.                                                     |
-| Before/After Step Hooks      |    ✅     | For auditing, metrics, etc.                                                            |
-| State Persistence            |    ✅     | SQLite built-in; pluggable interface                                                   |
-| Workflow Resumption          |    ✅     | Survives crashes/restarts                                                              |
-| Asynchronous Execution       |    ✅     | Run workflows in background                                                            |
-| Synchronous Execution        |    ✅     | For tests and CLI                                                                      |
-| Pluggable Storage            |    ✅     | Implement your own Store                                                               |
-| Queue Engine                 |    ✅     | Provides concurrent background processing for queued tasks and workflows               |
-| Queue                        |    ✅     | Built-in; supports enqueue, dequeue, and worker pool management                        |
-| CLI/HTTP Example Workflows   |    ✅     | See `examples/` directory                                                              |
-| Context Propagation          |    ✅     | Step context carries deadlines, values                                                 |
-| Step Metadata in Context     |    ✅     | Step name injected for idempotency                                                     |
-| Testing Support              |    ✅     | Unit, integration, E2E patterns                                                        |
-| GoDoc & User Guide           |    ✅     | See `docs/userguide.md`                                                                |
+| Feature                      | Supported | Notes                                                                                     |
+| ---------------------------- | :-------: | --------------------------------------------------------------------------------------    |
+| Step Retry Policies          |    ✅     | Per-step, with customizable attempts and flexible backoff (constant, exponential, etc)    |
+| Step Timeouts                |    ✅     | Per-step, context-based cancellation                                                      |
+| Idempotency Helpers/Patterns |    ✅     | Ergonomic, context-based, with docs/examples                                              |
+| Before/After Workflow Hooks  |    ✅     | For setup, teardown, logging, etc.                                                        |
+| Before/After Step Hooks      |    ✅     | For auditing, metrics, etc.                                                               |
+| State Persistence            |    ✅     | SQLite built-in; pluggable interface                                                      |
+| Workflow Resumption          |    ✅     | Survives crashes/restarts                                                                 |
+| Asynchronous Execution       |    ✅     | Run workflows in background                                                               |
+| Synchronous Execution        |    ✅     | For tests and CLI                                                                         |
+| Pluggable Storage            |    ✅     | Implement your own Store                                                                  |
+| Queue Engine                 |    ✅     | Provides an interface for concurrent background processing for queued tasks and workflows |
+| Queue                        |    ✅     | Built-in interface; supports enqueue, dequeue, and worker pool management                 |
+| CLI/HTTP Example Workflows   |    ✅     | See `examples/` directory                                                                 |
+| Context Propagation          |    ✅     | Step context carries deadlines, values                                                    |
+| Step Metadata in Context     |    ✅     | Step name injected for idempotency                                                        |
+| Testing Support              |    ✅     | Unit, integration, E2E patterns                                                           |
+| GoDoc & User Guide           |    ✅     | See `docs/userguide.md`                                                                   |
 
 ## Installation
 
@@ -136,10 +136,7 @@ func main() {
 This example shows the usage of the `Queue Engine`:
 
 ```go
- client := redis.NewClient(
-   &redis.Options{Addr: "localhost:6379"},
- )
- qEngine := NewRedisQueueEngine(client)
+// first, implement QueueEngine, Queue Interface
 
  wfengine, err := NewEngine(WithQueueEngine(qEngine))
  if err != nil {
