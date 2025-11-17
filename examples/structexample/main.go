@@ -79,7 +79,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	if err := engine.RunSync(ctx, wf); err != nil {
+	if err := engine.Run(ctx, wf); err != nil {
 		log.Fatalf("Workflow failed: %v", err)
 	}
 
