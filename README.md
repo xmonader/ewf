@@ -16,7 +16,7 @@ EWF is a simple, lightweight, and embeddable workflow framework for Go applicati
 ## Feature Matrix
 
 | Feature                      | Supported | Notes                                                                                     |
-| ---------------------------- | :-------: | --------------------------------------------------------------------------------------    |
+| ---------------------------- | :-------: | ----------------------------------------------------------------------------------------- |
 | Step Retry Policies          |    ✅     | Per-step, with customizable attempts and flexible backoff (constant, exponential, etc)    |
 | Step Timeouts                |    ✅     | Per-step, context-based cancellation                                                      |
 | Idempotency Helpers/Patterns |    ✅     | Ergonomic, context-based, with docs/examples                                              |
@@ -177,6 +177,23 @@ This example shows the usage of the `Queue Engine`:
  }
  wfengine.Run(context, workflow)
 ```
+
+### Workflow Options
+
+When creating a workflow instance you can attach metadata or routing hints via options:
+
+```go
+wf, err := engine.NewWorkflow(
+    "my_workflow",
+    ewf.WithQueue("billing-jobs"),                   // enqueue instead of running inline
+    ewf.WithDisplayName("Quarterly Billing Run"),    // nicer display for dashboards/logs
+    ewf.WithMetadata(map[string]string{"region": "us"}),// arbitrary key/value context
+)
+```
+
+- `WithQueue` wires the workflow to a queue so `engine.Run` enqueues instead of executing immediately.
+- `WithDisplayName` is useful for logs, observability tools, or UIs that show human-readable labels.
+- `WithMetadata` persists arbitrary contextual data alongside the workflow and is available wherever the workflow is reloaded.
 
 ## Retry Policy & Backoff Examples
 
