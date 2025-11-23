@@ -3,9 +3,116 @@ package ewf
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
+
+func TestWorkflowOptions(t *testing.T) {
+	t.Run("WithDisplayName", func(t *testing.T) {
+		displayName := "Test Workflow Display Name"
+		wf := NewWorkflow("test-workflow", WithDisplayName(displayName))
+
+		if wf.DisplayName != displayName {
+			t.Errorf("expected display name %q, got %q", displayName, wf.DisplayName)
+		}
+
+		displayName = "Modified Name"
+		if wf.DisplayName == displayName {
+			t.Errorf("workflow display name should not be affected by modifying original string")
+		}
+	})
+
+	t.Run("WithMetadata", func(t *testing.T) {
+		metadata := map[string]string{
+			"team":     "payments",
+			"priority": "high",
+			"region":   "us-east",
+		}
+
+		wf := NewWorkflow("test-workflow", WithMetadata(metadata))
+
+		if !reflect.DeepEqual(wf.Metadata, metadata) {
+			t.Errorf("expected metadata %v, got %v", metadata, wf.Metadata)
+		}
+
+		metadata["new_key"] = "new_value"
+		if _, exists := wf.Metadata["new_key"]; exists {
+			t.Errorf("workflow metadata should not be affected by modifying original map")
+		}
+
+		if _, exists := metadata["new_key"]; !exists {
+			t.Errorf("original map should still have the new key")
+		}
+
+		expectedMetadata := map[string]string{
+			"team":     "payments",
+			"priority": "high",
+			"region":   "us-east",
+		}
+		if !reflect.DeepEqual(wf.Metadata, expectedMetadata) {
+			t.Errorf("expected workflow metadata to remain %v, got %v", expectedMetadata, wf.Metadata)
+		}
+	})
+
+	t.Run("WithMetadataNil", func(t *testing.T) {
+		wf := NewWorkflow("test-workflow", WithMetadata(nil))
+
+		if wf.Metadata == nil {
+			t.Errorf("expected metadata map to be initialized even when nil is passed")
+		}
+		if len(wf.Metadata) != 0 {
+			t.Errorf("expected empty metadata map, got %v", wf.Metadata)
+		}
+	})
+
+	t.Run("WithQueue", func(t *testing.T) {
+		queueName := "test-queue"
+		wf := NewWorkflow("test-workflow", WithQueue(queueName))
+
+		if wf.QueueName != queueName {
+			t.Errorf("expected queue name %q, got %q", queueName, wf.QueueName)
+		}
+	})
+
+	t.Run("MultipleOptions", func(t *testing.T) {
+		metadata := map[string]string{"key": "value"}
+		wf := NewWorkflow(
+			"test-workflow",
+			WithQueue("my-queue"),
+			WithDisplayName("My Workflow"),
+			WithMetadata(metadata),
+		)
+
+		if wf.QueueName != "my-queue" {
+			t.Errorf("expected queue name my-queue, got %q", wf.QueueName)
+		}
+		if wf.DisplayName != "My Workflow" {
+			t.Errorf("expected display name My Workflow, got %q", wf.DisplayName)
+		}
+		expectedMetadata := map[string]string{"key": "value"}
+		if !reflect.DeepEqual(wf.Metadata, expectedMetadata) {
+			t.Errorf("expected metadata %v, got %v", expectedMetadata, wf.Metadata)
+		}
+	})
+
+	t.Run("DefaultValues", func(t *testing.T) {
+		wf := NewWorkflow("test-workflow")
+
+		if wf.QueueName != "" {
+			t.Errorf("expected empty queue name, got %q", wf.QueueName)
+		}
+		if wf.DisplayName != "" {
+			t.Errorf("expected empty display name, got %q", wf.DisplayName)
+		}
+		if wf.Metadata == nil {
+			t.Fatalf("expected metadata map to be initialized")
+		}
+		if len(wf.Metadata) != 0 {
+			t.Errorf("expected empty metadata map, got %v", wf.Metadata)
+		}
+	})
+}
 
 // TestWorkflow_Run_Simple tests a simple workflow run.
 //
@@ -71,6 +178,90 @@ func TestWorkflow_Run_Simple(t *testing.T) {
 	storedWf, err := engine.Store().LoadWorkflowByUUID(context.Background(), wf.UUID)
 	if err != nil {
 		t.Fatalf("failed to load workflow from store: %v", err)
+	}
+	if storedWf.CurrentStep != 2 {
+		t.Errorf("expected currentStep to be 2, got %d", storedWf.CurrentStep)
+	}
+	if _, ok := storedWf.State["step1output"]; !ok {
+		t.Errorf("step1 output not found")
+	}
+	if _, ok := storedWf.State["step2output"]; !ok {
+		t.Errorf("step2 output not found")
+	}
+}
+
+func TestWorkflow_Run_Simple_WithDisplayNameAndMetadata(t *testing.T) {
+	store, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("failed to close store: %v", err)
+		}
+	})
+
+	engine, err := NewEngine(WithStore(store))
+	if err != nil {
+		t.Fatalf("failed to create engine: %v", err)
+	}
+
+	var step1Done bool
+	engine.Register("step1", func(ctx context.Context, state State) error {
+		step1Done = true
+		state["step1output"] = "output from step1"
+		return nil
+	})
+
+	var step2Done bool
+	engine.Register("step2", func(ctx context.Context, state State) error {
+		step2Done = true
+		state["step2output"] = "output from step2"
+		return nil
+	})
+
+	step1 := Step{Name: "step1"}
+	step2 := Step{Name: "step2"}
+
+	engine.RegisterTemplate("workflow-with-metadata", &WorkflowTemplate{
+		Steps: []Step{step1, step2},
+	})
+
+	metadata := map[string]string{
+		"team":     "payments",
+		"priority": "high",
+		"region":   "us-east",
+	}
+	displayName := "Payment Processing Workflow"
+
+	wf, err := engine.NewWorkflow("workflow-with-metadata",
+		WithDisplayName(displayName),
+		WithMetadata(metadata),
+	)
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	err = engine.Run(context.Background(), wf)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !step1Done {
+		t.Errorf("step1 not executed")
+	}
+	if !step2Done {
+		t.Errorf("step2 not executed")
+	}
+
+	storedWf, err := engine.Store().LoadWorkflowByUUID(context.Background(), wf.UUID)
+	if err != nil {
+		t.Fatalf("failed to load workflow from store: %v", err)
+	}
+	if storedWf.DisplayName != displayName {
+		t.Errorf("expected display name %q, got %q", displayName, storedWf.DisplayName)
+	}
+	if !reflect.DeepEqual(storedWf.Metadata, metadata) {
+		t.Errorf("expected metadata %v, got %v", metadata, storedWf.Metadata)
 	}
 	if storedWf.CurrentStep != 2 {
 		t.Errorf("expected currentStep to be 2, got %d", storedWf.CurrentStep)

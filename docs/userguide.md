@@ -77,6 +77,26 @@ wfFromStore, _ := store.LoadWorkflowByUUID(context.Background(), wf.UUID)
 fmt.Println("Current step:", wfFromStore.CurrentStep)
 ```
 
+### Workflow Options
+
+You can enrich a workflow when you create it:
+
+```go
+wf, _ := engine.NewWorkflow(
+    "my_workflow",
+    ewf.WithQueue("billing-queue"),                 // enqueue instead of running inline
+    ewf.WithDisplayName("Quarterly billing run"),   // nicer label for logs/UI
+    ewf.WithMetadata(map[string]string{                // arbitrary persisted context
+        "region": "us-east",
+        "initiated_by": "system-cron",
+    }),
+)
+```
+
+- `WithQueue` routes the workflow through the queue engine so it can be processed asynchronously.
+- `WithDisplayName` gives the workflow a friendly name for dashboards, logs, and audits.
+- `WithMetadata` persists arbitrary key/value context that remains available when the workflow is reloaded from the store.
+
 ---
 
 ## 3. Defining Steps

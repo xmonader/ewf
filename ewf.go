@@ -146,14 +146,16 @@ type Store interface {
 
 // Workflow represents a workflow instance.
 type Workflow struct {
-	UUID        string         `json:"uuid"`
-	Name        string         `json:"name"`
-	Status      WorkflowStatus `json:"status"`
-	State       State          `json:"state"`
-	CurrentStep int            `json:"current_step"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Steps       []Step         `json:"steps"`
-	QueueName   string         `json:"queue_name"`
+	UUID        string            `json:"uuid"`
+	Name        string            `json:"name"`
+	Status      WorkflowStatus    `json:"status"`
+	State       State             `json:"state"`
+	CurrentStep int               `json:"current_step"`
+	CreatedAt   time.Time         `json:"created_at"`
+	Steps       []Step            `json:"steps"`
+	QueueName   string            `json:"queue_name"`
+	DisplayName string            `json:"display_name"`
+	Metadata    map[string]string `json:"metadata"`
 
 	// non persisted fields
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`
@@ -181,6 +183,26 @@ func WithQueue(queueName string) WorkflowOption {
 	}
 }
 
+// WithDisplayName specifies the display name of the workflow.
+func WithDisplayName(displayName string) WorkflowOption {
+	return func(w *Workflow) {
+		w.DisplayName = displayName
+	}
+}
+
+// WithMetadata specifies the metadata of the workflow.
+func WithMetadata(metadata map[string]string) WorkflowOption {
+	return func(w *Workflow) {
+		if metadata == nil {
+			return
+		}
+		w.Metadata = make(map[string]string, len(metadata))
+		for k, v := range metadata {
+			w.Metadata[k] = v
+		}
+	}
+}
+
 // NewWorkflow creates a new workflow instance with the given name and options.
 func NewWorkflow(name string, opts ...WorkflowOption) Workflow {
 	w := Workflow{
@@ -190,6 +212,7 @@ func NewWorkflow(name string, opts ...WorkflowOption) Workflow {
 		Steps:     []Step{},
 		State:     make(State),
 		CreatedAt: time.Now(),
+		Metadata:  make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(&w)
