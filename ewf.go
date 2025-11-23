@@ -191,10 +191,15 @@ func WithDisplayName(displayName string) WorkflowOption {
 }
 
 // WithMetadata specifies the metadata of the workflow.
-
 func WithMetadata(metadata map[string]string) WorkflowOption {
 	return func(w *Workflow) {
-		w.Metadata = metadata
+		if metadata == nil {
+			return
+		}
+		w.Metadata = make(map[string]string, len(metadata))
+		for k, v := range metadata {
+			w.Metadata[k] = v
+		}
 	}
 }
 
@@ -213,4 +218,17 @@ func NewWorkflow(name string, opts ...WorkflowOption) Workflow {
 		opt(&w)
 	}
 	return w
+}
+
+func copyWorkflowMetadata(w *Workflow) {
+	if w.Metadata == nil {
+		w.Metadata = make(map[string]string)
+		return
+	}
+	metadataCopy := make(map[string]string, len(w.Metadata))
+	for k, v := range w.Metadata {
+		metadataCopy[k] = v
+	}
+	w.Metadata = metadataCopy
+
 }
