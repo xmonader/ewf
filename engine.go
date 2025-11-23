@@ -218,9 +218,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w Workflow)
 
 	// Save workflow immediately when it starts running so it's visible in status checks
 	if e.store != nil {
-		wCopy := w
-		copyWorkflowMetadata(&wCopy)
-		if err := e.store.SaveWorkflow(ctx, wCopy); err != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
 			return fmt.Errorf("failed to save workflow state when starting: %w", err)
 		}
 	}
@@ -302,18 +300,14 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w Workflow)
 		if stepErr != nil {
 			w.Status = StatusFailed
 			if e.store != nil {
-				wCopy := w
-				copyWorkflowMetadata(&wCopy)
-				_ = e.store.SaveWorkflow(ctx, wCopy)
+				_ = e.store.SaveWorkflow(ctx, w)
 			}
 			return fmt.Errorf("workflow failed: step %s: %w", step.Name, stepErr)
 		}
 
 		w.CurrentStep = i + 1
 		if e.store != nil {
-			wCopy := w
-			copyWorkflowMetadata(&wCopy)
-			if err := e.store.SaveWorkflow(ctx, wCopy); err != nil {
+			if err := e.store.SaveWorkflow(ctx, w); err != nil {
 				return fmt.Errorf("failed to save workflow state after step %d: %v", w.CurrentStep-1, err)
 			}
 		}
@@ -321,9 +315,7 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w Workflow)
 
 	w.Status = StatusCompleted
 	if e.store != nil {
-		wCopy := w
-		copyWorkflowMetadata(&wCopy)
-		if err := e.store.SaveWorkflow(ctx, wCopy); err != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
 			return fmt.Errorf("failed to save final workflow state: %w", err)
 		}
 	}
@@ -342,7 +334,6 @@ func (e *Engine) runWithQueue(ctx context.Context, w Workflow, queueName string)
 		return fmt.Errorf("failed to get queue %s: %v", queueName, err)
 	}
 
-	copyWorkflowMetadata(&w)
 	// enqueue workflow
 	if err := queue.Enqueue(ctx, w); err != nil {
 		return fmt.Errorf("failed to enqueue workflow %s to queue %s: %v", w.Name, queueName, err)
@@ -360,13 +351,10 @@ func (e *Engine) Run(ctx context.Context, w Workflow, opts ...RunOption) error {
 	for _, opt := range opts {
 		opt(options)
 	}
-	copyWorkflowMetadata(&w)
 
 	// Save workflow to store if configured
 	if e.store != nil {
-		wCopy := w
-		copyWorkflowMetadata(&wCopy)
-		if err := e.store.SaveWorkflow(ctx, wCopy); err != nil {
+		if err := e.store.SaveWorkflow(ctx, w); err != nil {
 			return fmt.Errorf("failed to save workflow: %v", err)
 		}
 	}
@@ -426,7 +414,6 @@ func (e *Engine) ResumeWorkflows() {
 				log.Printf("failed to load workflow %s for resumption: %v", id, err)
 				continue
 			}
-			copyWorkflowMetadata(&wf)
 			if wf.Status == StatusPending && wf.QueueName != "" {
 				log.Printf("Workflow %s is pending and has a queue name, skipping resumption", wf.UUID)
 				continue
@@ -534,7 +521,6 @@ func (e *Engine) startQueueWorkers(ctx context.Context, q Queue, workerDef Worke
 						continue
 					}
 
-					copyWorkflowMetadata(&wf)
 					workCtx := ctx
 					cancel := func() {}
 					if workerDef.WorkTimeout > 0 {

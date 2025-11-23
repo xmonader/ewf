@@ -219,16 +219,3 @@ func NewWorkflow(name string, opts ...WorkflowOption) Workflow {
 	}
 	return w
 }
-
-func copyWorkflowMetadata(w *Workflow) {
-	if w.Metadata == nil {
-		w.Metadata = make(map[string]string)
-		return
-	}
-	metadataCopy := make(map[string]string, len(w.Metadata))
-	for k, v := range w.Metadata {
-		metadataCopy[k] = v
-	}
-	w.Metadata = metadataCopy
-
-}
