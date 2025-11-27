@@ -299,10 +299,13 @@ func (e *Engine) run(ctx context.Context, stepFns map[string]StepFn, w Workflow)
 
 		if stepErr != nil {
 			w.Status = StatusFailed
+
+			wfErr := fmt.Errorf("workflow failed: step %s: %w", step.Name, stepErr)
+			w.Error = wfErr.Error()
 			if e.store != nil {
 				_ = e.store.SaveWorkflow(ctx, w)
 			}
-			return fmt.Errorf("workflow failed: step %s: %w", step.Name, stepErr)
+			return wfErr
 		}
 
 		w.CurrentStep = i + 1

@@ -156,6 +156,7 @@ type Workflow struct {
 	QueueName   string            `json:"queue_name"`
 	DisplayName string            `json:"display_name"`
 	Metadata    map[string]string `json:"metadata"`
+	Error       string            `json:"error"`
 
 	// non persisted fields
 	beforeWorkflowHooks []BeforeWorkflowHook `json:"-"`
